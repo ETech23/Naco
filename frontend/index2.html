@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  
+  <meta name="color-scheme" content="light dark">
+  <title>Naco — Find Trusted Artisans</title>
+
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/native.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f7a4a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+</head>
+<body>
+  <!-- Native App Container -->
+  <div class="app-container">
+    <!-- Pages will be dynamically inserted here -->
+  </div>
+
+  <!-- Native Tab Bar -->
+  <div class="tab-bar-container">
+    <div class="native-tab-bar">
+      <button class="tab-item active" data-route="home" onclick="navigateToTab('home')">
+        <i class="fas fa-home"></i>
+        <span>Home</span>
+      </button>
+      <button class="tab-item" data-route="search" onclick="navigateToTab('search')">
+        <i class="fas fa-search"></i>
+        <span>Search</span>
+      </button>
+      <button class="tab-item" data-route="bookings" onclick="navigateToTab('bookings')">
+        <i class="fas fa-calendar"></i>
+        <span>Bookings</span>
+      </button>
+      <button class="tab-item" data-route="profile" onclick="navigateToTab('profile')">
+        <i class="fas fa-user"></i>
+        <span>Profile</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading indicator -->
+  <div id="native-loading" class="native-loading" style="display: none;">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Loading...</div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/pocketbase@0.20.0/dist/pocketbase.umd.js"></script>
+  <script src="js/navigation.js"></script>
+  <script src="js/transitions.js"></script>
+  <script src="js/routes.js"></script>
+  <script type="module" src="js/native-app.js"></script>
+</body>
+</html>
