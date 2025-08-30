@@ -15,12 +15,12 @@ RUN wget https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSIO
     && chmod +x pocketbase \
     && rm pocketbase_${PB_VERSION}_linux_amd64.zip
 
-# Copy your data and migrations
-COPY pb_data ./pb_data
-COPY pb_migrations ./pb_migrations
+# Create empty data directory (don't copy existing pb_data)
+RUN mkdir -p /pb_data
 
 # Expose port
 EXPOSE 8080
 
 # Start PocketBase
 CMD ["./pocketbase", "serve", "--http=0.0.0.0:8080", "--dir=/pb_data"]
+
