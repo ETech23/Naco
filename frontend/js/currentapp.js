@@ -1587,12 +1587,26 @@ handleQuickCatClick(e) {
     }
   }
 
-  logout() {
+  /**logout() {
     this.setState({ user: null, notifications: [], notificationCount: 0 });
     this.clearSession();
     this.stopNotificationPolling();
     this.showToast('Logged out successfully', 'success');
-  }
+  }**/
+  
+  logout() {
+  this.setState({ 
+    user: null, 
+    notifications: [], 
+    notificationCount: 0,
+    artisans: [],          // reset artisans
+    filteredArtisan: []    // reset filtered list
+  });
+  
+  this.clearSession();
+  this.stopNotificationPolling();
+  this.showToast('Logged out successfully', 'success');
+}
 
   // Artisan Profile and Booking
   async openArtisanProfile(artisanId) {
@@ -2992,9 +3006,20 @@ ${this.renderVerificationBadge(artisan)}</strong>
     }
   }
 
-  clearSession() {
+  /**clearSession() {
     localStorage.removeItem('naco_session');
-  }
+  }**/
+  
+  clearSession() {
+  localStorage.removeItem('naco_session');
+  localStorage.removeItem('user'); 
+  localStorage.removeItem('profile'); 
+  localStorage.removeItem('filteredArtisan'); 
+
+  // Clear everything
+   localStorage.clear(); 
+   sessionStorage.clear();
+}
 
   // PWA Installation
   setupInstallPrompt() {

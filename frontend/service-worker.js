@@ -7,8 +7,8 @@
  **********************************************************/
 
 // ---- VERSIONED CACHE NAMES (bump these to ship updates) ----
-const CACHE_NAME = 'naco-static-v6.1.2';       // ← bump when static files change
-const API_CACHE_NAME = 'naco-api-v4.1.2';      // ← bump when API strategy changes
+const CACHE_NAME = 'naco-static-v6.1.3';       // ← bump when static files change
+const API_CACHE_NAME = 'naco-api-v4.1.3';      // ← bump when API strategy changes
 
 // ---- STATIC FILES TO PRECACHE (yours preserved) ----
 const FILES_TO_CACHE = [

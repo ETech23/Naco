@@ -526,6 +526,243 @@ closeProfilePage() {
     
     
   // Search Functions
+/**  async handleMainSearch(query) {
+  // Don't clear if query is empty - let user type
+  if (!query || query.trim().length === 0) {
+    this.$('#clear-search')?.classList.add('hidden');
+    this.$('#search-results-container')?.classList.add('hidden');
+    return;
+  }
+
+  // Only search if query is at least 2 characters
+  if (query.trim().length < 2) {
+    return;
+  }
+
+  const resultsContainer = this.$('#search-results-container');
+  const resultsList = this.$('#search-results-list');
+  const clearBtn = this.$('#clear-search');
+  
+  if (!resultsContainer || !resultsList) return;
+
+  try {
+    clearBtn?.classList.remove('hidden');
+    resultsContainer.classList.remove('hidden');
+    
+    const city = this.$('#search-city-select')?.value || '';
+    const results = await this.withRetry(() => API.searchArtisans(query, city));
+    
+    if (results.length > 0) {
+      resultsList.innerHTML = results.map(artisan => 
+        this.renderSearchResultCard(artisan, query)
+      ).join('');
+
+    } else {
+      resultsList.innerHTML = `<p class="muted">No results found for "${this.escapeHtml(query)}"</p>`;
+    }
+  } catch (error) {
+    console.error('Search failed:', error);
+    resultsList.innerHTML = '<p class="muted">Search error. Please try again.</p>';
+  }
+}**/
+
+// Update your clearMainSearch function to not interfere with typing
+clearMainSearch() {
+  const searchInput = this.$('#main-search-input');
+  if (searchInput) {
+    searchInput.value = '';
+    searchInput.focus(); // Keep focus after clearing
+  }
+  this.$('#clear-search')?.classList.add('hidden');
+  this.$('#search-results-container')?.classList.add('hidden');
+}
+
+// Update your search input event binding
+bindSearchEvents() {
+  const searchInput = this.$('#main-search-input');
+  if (searchInput) {
+    // Remove any existing listeners
+    searchInput.removeEventListener('input', this.searchInputHandler);
+    
+    // Create bound handler to preserve 'this' context
+    this.searchInputHandler = (e) => {
+      const value = e.target.value;
+      this.debounce(() => this.handleMainSearch(value), 300);
+    };
+    
+    searchInput.addEventListener('input', this.searchInputHandler);
+  }
+  
+  this.bindEvent('#clear-search', 'click', () => this.clearMainSearch());
+  this.bindEvent('#close-search', 'click', () => this.closeSearchPage());
+}
+
+generateSearchSuggestion(query) {
+  // Common profession spellings and corrections
+  const corrections = {
+    'electrcian': 'electrician',
+    'elctrician': 'electrician',
+    'beuty': 'beauty',
+    'beatician': 'beautician',
+    'mecanic': 'mechanic',
+    'plumer': 'plumber',
+    'carpentr': 'carpenter',
+    'tailr': 'tailor',
+    'brog': 'prog', // Example from your question
+    'bright': 'wright' // Example from your question
+  };
+  
+  const lowercaseQuery = query.toLowerCase();
+  
+  // Check direct corrections first
+  if (corrections[lowercaseQuery]) {
+    return corrections[lowercaseQuery];
+  }
+  
+  // Fuzzy search implementation with typo tolerance
+function applyFuzzySearch(artisans, searchTerm) {
+  const results = artisans.map(artisan => {
+    const profile = artisan.expand?.artisan_profiles_via_user?.[0] || {};
+    
+    // Fields to search in
+    const searchableFields = {
+      name: artisan.name || '',
+      skill: profile.skill || artisan.skill || '',
+      description: profile.description || artisan.description || '',
+      location: artisan.location || '',
+      specialties: (profile.specialties || artisan.specialties || []).join(' ')
+    };
+    
+    let relevanceScore = 0;
+    let matchedFields = [];
+    
+    // Calculate relevance score
+    Object.entries(searchableFields).forEach(([field, value]) => {
+      const fieldValue = value.toLowerCase();
+      const score = calculateFieldRelevance(fieldValue, searchTerm);
+      
+      if (score > 0) {
+        relevanceScore += score * getFieldWeight(field);
+        matchedFields.push(field);
+      }
+    });
+    
+    return {
+      ...artisan,
+      relevanceScore,
+      matchedFields
+    };
+  })
+  .filter(artisan => artisan.relevanceScore > 0)
+  .sort((a, b) => {
+    // Sort by premium first, then relevance score
+    if (a.premium && !b.premium) return -1;
+    if (!a.premium && b.premium) return 1;
+    return b.relevanceScore - a.relevanceScore;
+  });
+  
+  return results;
+}
+
+function calculateFieldRelevance(fieldValue, searchTerm) {
+  let score = 0;
+  
+  // Exact match (highest score)
+  if (fieldValue.includes(searchTerm)) {
+    score += 100;
+  }
+  
+  // Word matches
+  const searchWords = searchTerm.split(' ').filter(word => word.length >= 2);
+  searchWords.forEach(word => {
+    if (fieldValue.includes(word)) {
+      score += 50;
+    }
+  });
+  
+  // Fuzzy matching for typos (using simple edit distance)
+  const words = fieldValue.split(' ');
+  words.forEach(word => {
+    if (word.length >= 3) {
+      const similarity = calculateSimilarity(word, searchTerm);
+      if (similarity > 0.7) { // 70% similarity threshold
+        score += Math.round(similarity * 30);
+      }
+      
+      // Check similarity with individual search words
+      searchWords.forEach(searchWord => {
+        if (searchWord.length >= 3) {
+          const wordSimilarity = calculateSimilarity(word, searchWord);
+          if (wordSimilarity > 0.7) {
+            score += Math.round(wordSimilarity * 25);
+          }
+        }
+      });
+    }
+  });
+  
+  return score;
+}
+
+function getFieldWeight(field) {
+  const weights = {
+    name: 3.0,
+    skill: 2.5,
+    specialties: 2.0,
+    location: 1.5,
+    description: 1.0
+  };
+  return weights[field] || 1.0;
+}
+
+// Simple Levenshtein distance-based similarity
+function calculateSimilarity(str1, str2) {
+  const longer = str1.length > str2.length ? str1 : str2;
+  const shorter = str1.length > str2.length ? str2 : str1;
+  
+  if (longer.length === 0) return 1.0;
+  
+  const editDistance = levenshteinDistance(longer, shorter);
+  return (longer.length - editDistance) / longer.length;
+}
+
+function levenshteinDistance(str1, str2) {
+  const matrix = Array(str2.length + 1).fill().map(() => Array(str1.length + 1).fill(0));
+  
+  for (let i = 0; i <= str1.length; i++) matrix[0][i] = i;
+  for (let j = 0; j <= str2.length; j++) matrix[j][0] = j;
+  
+  for (let j = 1; j <= str2.length; j++) {
+    for (let i = 1; i <= str1.length; i++) {
+      const substitutionCost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[j][i] = Math.min(
+        matrix[j][i - 1] + 1, // deletion
+        matrix[j - 1][i] + 1, // insertion
+        matrix[j - 1][i - 1] + substitutionCost // substitution
+      );
+    }
+  }
+  
+  return matrix[str2.length][str1.length];
+}
+       
+  
+  // Find closest match using similarity
+  const commonTerms = Object.keys(corrections).concat(Object.values(corrections));
+  let bestMatch = '';
+  let bestSimilarity = 0;
+  
+  commonTerms.forEach(term => {
+    const similarity = calculateSimilarity(lowercaseQuery, term.toLowerCase());
+    if (similarity > bestSimilarity && similarity > 0.6) {
+      bestSimilarity = similarity;
+      bestMatch = term;
+    }
+  });
+  
+  return bestMatch || null;
+}
+
   async handleMainSearch(query) {
     const resultsContainer = this.$('#search-results-container');
     const resultsList = this.$('#search-results-list');
@@ -643,28 +880,45 @@ renderSearchResultCard(artisan) {
   `;
 }
 
-  /**
-   renderSearchResultCard(artisan) {
-    return `
-      <div class="search-result-card" data-id="${artisan.id}">
-        <img style="width: 150px; height: 150px;" src="${artisan.photo || '../assets/avatar-placeholder.png'}" 
-             alt="${this.escapeHtml(artisan.name)}"
-             onerror="this.src='../assets/avatar-placeholder.png'">
-        <div class="search-result-info">
-          <h4>${this.escapeHtml(artisan.name)} ${this.renderVerificationBadge(artisan)}</h4>
-          <p class="search-result-skill">${this.escapeHtml(artisan.skill)}</p>
-          <p class="search-result-location">${this.escapeHtml(artisan.location)}</p>
-          <div class="search-result-rating">
-            <i class="fas fa-star"></i> ${(artisan.rating || 0).toFixed(1)}
-            ${artisan.premium ? '<span class="premium-badge">PREMIUM</span>' : ''}
-          </div>
-        </div>
-        <div class="search-result-price">
-          ${this.formatCurrency(artisan.rate)}
+
+/**renderSearchResultCard(artisan, searchQuery) {
+  const highlightText = (text, query) => {
+    if (!query || !text) return text;
+    const words = query.split(' ').filter(w => w.length >= 2);
+    let highlighted = text;
+    
+    words.forEach(word => {
+      const regex = new RegExp(`(${word})`, 'gi');
+      highlighted = highlighted.replace(regex, '<mark>$1</mark>');
+    });
+    
+    return highlighted;
+  };
+
+  const profile = artisan.expand?.artisan_profiles_via_user?.[0] || {};
+  
+  return `
+    <div class="search-result-card" data-id="${artisan.id}">
+      <img style="max-width: 120px; max-height: 120px;" src="${artisan.photo || '../assets/avatar-placeholder.png'}" 
+           alt="${this.escapeHtml(artisan.name)}"
+           onerror="this.src='../assets/avatar-placeholder.png'">
+      <div class="search-result-info">
+        <h4>${highlightText(this.escapeHtml(artisan.name), searchQuery)} ${this.renderVerificationBadge(artisan)}</h4>
+        <p class="search-result-skill">${highlightText(this.escapeHtml(profile.skill || artisan.skill || ''), searchQuery)}</p>
+        <p class="search-result-location">${this.escapeHtml(artisan.location)}</p>
+        <div class="search-result-rating">
+          <i class="fas fa-star"></i> ${(artisan.rating || 0).toFixed(1)}
+          ${artisan.premium ? '<span class="premium-badge">PREMIUM</span>' : ''}
+          ${artisan.matchedFields ? `<small class="matched-in">Found in: ${artisan.matchedFields.join(', ')}</small>` : ''}
         </div>
       </div>
-    `;
-  }**/
+      <div class="search-result-price">
+        ${this.formatCurrency(profile.rate || artisan.rate || 0)}
+      </div>
+    </div>
+  `;
+}**/
+ 
 
   clearMainSearch() {
     this.$('#main-search-input').value = '';
@@ -1104,7 +1358,136 @@ console.log("User state after login:", this.state.user);
     });
   }
 
-  async handleProfileUpdate() {
+
+    
+    async openProfileUpdate() {
+  if (!this.state.user) {
+    this.openLoginModal();
+    return;
+  }
+
+  const user = this.state.user;
+  const html = `
+    <div class="profile-update-modal">
+      <h2>Update Profile</h2>
+      
+      <form id="profile-form" class="booking-form">
+        <div class="profile-image-upload">
+          <label for="profile-image" class="upload-label">
+            <img id="profile-preview" src="${user.photo || '../assets/avatar-placeholder.png'}" 
+                 alt="Profile preview" class="profile-preview">
+            <div class="upload-overlay">
+              <i class="fas fa-camera"></i>
+              <span>Change Photo</span>
+            </div>
+          </label>
+          <input type="file" id="profile-image" accept="image/*" style="display: none;">
+        </div>
+        
+        <label>
+          Name
+          <input id="upd-name" type="text" value="${this.escapeHtml(user.name || '')}" required>
+        </label>
+        
+        <label>
+          Skill
+          <input id="upd-skill" type="text" value="${this.escapeHtml(user.skill || 'General services')}" required>
+        </label>
+        
+        <label>
+          Years of Experience
+          <input id="upd-experience" type="number" value="${this.escapeHtml(user.years_experience || '')}" min="0" required>
+        </label>
+        
+        <label>
+          Phone (WhatsApp)
+          <input id="upd-phone" type="tel" value="${this.escapeHtml(user.phone || '')}" placeholder="08123456789">
+        </label>
+        
+        <label>
+          About
+          <textarea id="upd-about" rows="3" required>${this.escapeHtml(user.about || 'A professional with more than 5 years experience.')}</textarea>
+        </label>
+        
+        <label>
+          Location
+          <select id="upd-location">
+            ${this.state.cities.map(city => 
+              `<option value="${city}" ${city === user.location ? 'selected' : ''}>${city}</option>`
+            ).join('')}
+          </select>
+        </label>
+        
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+          <button type="button" id="save-profile" class="btn-primary">
+            <i class="fas fa-save"></i> Save Changes
+          </button>
+          <button type="button" id="cancel-profile" class="link-btn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  this.showModal(html, () => {
+    // Image preview functionality
+    const imageInput = this.$('#profile-image');
+    const imagePreview = this.$('#profile-preview');
+    
+    imageInput?.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          imagePreview.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    this.$('#save-profile')?.addEventListener('click', () => this.handleProfileUpdate());
+    this.$('#cancel-profile')?.addEventListener('click', () => this.hideModal());
+  });
+}
+
+async handleProfileUpdate() {
+  const updates = {
+    name: this.$('#upd-name')?.value,
+    skill: this.$('#upd-skill')?.value,
+    years_experience: this.$('#upd-experience')?.value,
+    phone: this.$('#upd-phone')?.value,
+    about: this.$('#upd-about')?.value,
+    location: this.$('#upd-location')?.value
+  };
+
+  if (!updates.name) {
+    this.showToast('Name is required', 'error');
+    return;
+  }
+
+  try {
+    // Handle image upload if a new image was selected
+    const imageInput = this.$('#profile-image');
+    const imageFile = imageInput?.files[0];
+    
+    if (imageFile) {
+      this.showToast('Uploading image...', 'info');
+      
+      // Upload image first
+      const imageUrl = await API.uploadProfileImage(this.state.user.id, imageFile);
+      updates.photo = imageUrl;
+    }
+
+    const updatedUser = await API.updateUserProfile(this.state.user.id, updates);
+    this.setState({ user: updatedUser });
+    this.saveSession();
+    this.hideModal();
+    this.showToast('Profile updated successfully', 'success');
+  } catch (error) {
+    console.error('Profile update failed:', error);
+    this.showToast('Failed to update profile', 'error');
+  }
+}
+  /**async handleProfileUpdate() {
     const updates = {
       name: this.$('#upd-name')?.value,
       skill: this.$('#upd-skill')?.value,
@@ -1115,7 +1498,7 @@ console.log("User state after login:", this.state.user);
       location: this.$('#upd-location')?.value
     };
 
-    if /**(!updates.name || !updates.email)**/ 
+    if /**(!updates.name || !updates.email)**
         (!updates.name){
       this.showToast('Name is required', 'error');
       return;
@@ -1131,14 +1514,23 @@ console.log("User state after login:", this.state.user);
       console.error('Profile update failed:', error);
       this.showToast('Failed to update profile', 'error');
     }
-  }
+  }**/
 
   logout() {
-    this.setState({ user: null, notifications: [], notificationCount: 0 });
-    this.clearSession();
-    this.stopNotificationPolling();
-    this.showToast('Logged out successfully', 'success');
+  this.setState({ user: null, notifications: [], notificationCount: 0 });
+
+  this.clearSession();
+
+  // Also clear API authentication
+  if (API?.pb?.authStore) {
+    API.pb.authStore.clear();
   }
+
+  this.stopNotificationPolling();
+  this.showToast('Logged out successfully', 'success');
+}
+  
+  
 
   // Artisan Profile and Booking
   
@@ -2050,90 +2442,273 @@ async openArtisanProfile(artisanId) {
 
   // My Services (for artisans)
   async openMyClients() {
-    if (!this.state.user || this.state.user.role !== 'artisan') return;
+  if (!this.state.user || this.state.user.role !== 'artisan') return;
 
-    try {
-      const bookings = await API.getUserBookings(this.state.user.id);
-      
-      const html = `
-        <div class="my-clients-modal">
-          <h2>My Clients</h2>
-          <p class="muted">Manage your bookings and client requests</p>
-          
-          <div class="client-stats">
-            <div class="stat-item">
-              <strong>${bookings.filter(b => b.status === 'pending').length}</strong>
-              <span>Pending</span>
-            </div>
-            <div class="stat-item">
-              <strong>${bookings.filter(b => b.status === 'confirmed').length}</strong>
-              <span>Confirmed</span>
-            </div>
-            <div class="stat-item">
-              <strong>${bookings.filter(b => b.status === 'completed').length}</strong>
-              <span>Completed</span>
-            </div>
+  try {
+    const bookings = await API.getUserBookings(this.state.user.id);
+    
+    const html = `
+      <div class="my-clients-modal">
+        <h2>My Clients</h2>
+        <p class="muted">Manage your bookings and client requests</p>
+        
+        <div class="client-stats">
+          <div class="stat-item">
+            <strong>${bookings.filter(b => b.status === 'pending').length}</strong>
+            <span>Pending</span>
           </div>
+          <div class="stat-item">
+            <strong>${bookings.filter(b => b.status === 'confirmed').length}</strong>
+            <span>Active</span>
+          </div>
+          <div class="stat-item">
+            <strong>${bookings.filter(b => b.status === 'pending_confirmation').length}</strong>
+            <span>Awaiting Confirmation</span>
+          </div>
+          <div class="stat-item">
+            <strong>${bookings.filter(b => b.status === 'completed').length}</strong>
+            <span>Completed</span>
+          </div>
+        </div>
 
-          <div class="bookings-list">
-            ${bookings.map(booking => `
+        <div class="bookings-list">
+          ${bookings.length ? bookings.map(booking => {
+            let statusText = (booking.status || 'pending').toUpperCase();
+            let statusClass = booking.status || 'pending';
+            
+            if (booking.status === 'pending_confirmation') {
+              statusText = 'AWAITING CLIENT CONFIRMATION';
+              statusClass = 'pending-confirmation';
+            }
+            
+            return `
               <div class="booking-item ${booking.status}">
                 <div class="booking-info">
                   <strong>${this.escapeHtml(booking.clientName)}</strong>
                   <p class="muted">${this.escapeHtml(booking.service)} • ${new Date(booking.date).toLocaleDateString()} ${booking.time}</p>
                   <p class="muted">Amount: ${this.formatCurrency(booking.amount || 0)}</p>
-                  <span class="status-badge status-${booking.status}">${booking.status.toUpperCase()}</span>
+                  <span class="status-badge status-${statusClass}">${statusText}</span>
+                  
+                  ${booking.status === 'pending_confirmation' ? `
+                    <div class="info-notice">
+                      <i class="fas fa-clock"></i> You've marked this job as completed. Waiting for client confirmation.
+                    </div>
+                  ` : ''}
                 </div>
                 <div class="booking-actions">
                   ${booking.status === 'pending' ? `
                     <button class="btn-cta accept-booking" data-id="${booking.id}">Accept</button>
                     <button class="link-btn decline-booking" data-id="${booking.id}">Decline</button>
+                  ` : booking.status === 'confirmed' ? `
+                    <button class="btn-cta complete-booking" data-id="${booking.id}">Mark Complete</button>
+                    <button class="link-btn view-booking-details" data-id="${booking.id}">View</button>
                   ` : `
                     <button class="link-btn view-booking-details" data-id="${booking.id}">View</button>
                   `}
                 </div>
               </div>
-            `).join('')}
-          </div>
-
-          <div style="text-align: center; margin-top: 20px;">
-            <button id="close-clients" class="link-btn">Close</button>
-          </div>
+            `;
+          }).join('') : '<p class="muted">No client bookings yet.</p>'}
         </div>
-      `;
-      
-      this.showModal(html, () => {
-        this.$$('.accept-booking').forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.handleBookingAction(e.target.dataset.id, 'confirmed');
-          });
-        });
 
-        this.$$('.decline-booking').forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.handleBookingAction(e.target.dataset.id, 'declined');
-          });
+        <div style="text-align: center; margin-top: 20px;">
+          <button id="close-clients" class="link-btn">Close</button>
+        </div>
+      </div>
+    `;
+    
+    this.showModal(html, () => {
+      this.$$('.accept-booking').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.handleBookingAction(e.target.dataset.id, 'confirmed');
         });
-        
-        this.$$('.view-booking-details').forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.openBookingDetails(e.target.dataset.id);
-          });
-        });
-        
-        this.$('#close-clients')?.addEventListener('click', () => this.hideModal());
       });
 
-    } catch (error) {
-      console.error('Failed to load client bookings:', error);
-      this.showToast('Failed to load bookings', 'error');
-    }
+      this.$$('.decline-booking').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.handleBookingAction(e.target.dataset.id, 'declined');
+        });
+      });
+
+      this.$$('.complete-booking').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (confirm('Are you sure you have completed this job? The client will be asked to confirm.')) {
+            this.handleBookingAction(e.target.dataset.id, 'completed');
+          }
+        });
+      });
+      
+      this.$$('.view-booking-details').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.openBookingDetails(e.target.dataset.id);
+        });
+      });
+      
+      this.$('#close-clients')?.addEventListener('click', () => this.hideModal());
+    });
+
+  } catch (error) {
+    console.error('Failed to load client bookings:', error);
+    this.showToast('Failed to load bookings', 'error');
+  }
+}
+  
+    async handleBookingAction(bookingId, action) {
+  // require login
+  if (!this.state.user) {
+    this.openLoginModal();
+    return;
   }
 
-  async handleBookingAction(bookingId, action) {
+  try {
+    const role = (this.state.user.role || 'client').toLowerCase();
+    const a = String(action || '').trim().toLowerCase();
+
+    // map UI actions to canonical DB statuses (role-aware)
+    let status;
+    // explicit action groups
+    const confirmedActions = new Set(['accept', 'accept_booking', 'confirm', 'confirmed']);
+    const declinedActions   = new Set(['decline', 'declined']);
+    const startActions      = new Set(['start', 'in_progress']);
+    const cancelActions     = new Set(['cancel', 'cancelled']);
+    const clientConfirm     = 'confirm_completion';
+    const clientReject      = 'reject_completion';
+    const artisanCompleteActions = new Set(['completed', 'mark_completed', 'artisan_completed']);
+
+    if (confirmedActions.has(a)) {
+      status = 'confirmed';
+    } else if (declinedActions.has(a)) {
+      status = 'declined';
+    } else if (startActions.has(a)) {
+      status = 'in_progress';
+    } else if (cancelActions.has(a)) {
+      status = 'cancelled';
+    } else if (a === clientConfirm) {
+      // client explicitly confirms — store final 'completed' status
+      status = 'completed';
+    } else if (a === clientReject) {
+      // client rejects completion — return to 'confirmed' so work continues
+      status = 'confirmed';
+    } else if (artisanCompleteActions.has(a)) {
+      // artisan marks as completed → client must confirm
+      status = role === 'artisan' ? 'pending_confirmation' : 'completed';
+    } else {
+      // unknown action — fail early with clear error
+      throw new Error(`Unknown action: ${action}`);
+    }
+
+    // whitelist DB statuses (server should also enforce)
+    const allowedStatuses = ['confirmed', 'declined', 'pending_confirmation', 'completed', 'cancelled', 'in_progress'];
+    if (!allowedStatuses.includes(status)) {
+      throw new Error(`Mapped to invalid status: ${status}`);
+    }
+
+    // perform the update via your API wrapper
+    const updatedBooking = await API.updateBookingStatus(bookingId, status);
+
+    // user-friendly messages per status
+    const statusMessages = {
+      pending_confirmation: 'Job marked as completed by artisan. Waiting for client confirmation.',
+      completed:            'Job marked completed.',
+      confirmed:            'Booking confirmed.',
+      declined:             'Booking declined.',
+      cancelled:            'Booking cancelled.',
+      in_progress:          'Booking is now in progress.'
+    };
+
+    this.showToast(statusMessages[status] || `Booking updated to ${status}`, 'success');
+
+    // refresh the relevant view so the UI reflects the change
+    if (role === 'artisan') {
+      // openMyClients expects artisan to view clients/bookings for them
+      if (typeof this.openMyClients === 'function') await this.openMyClients();
+    } else {
+      if (typeof this.openMyBookings === 'function') await this.openMyBookings();
+    }
+
+    return updatedBooking;
+  } catch (err) {
+    console.error('Failed to update booking:', err);
+    // Try to parse a useful message from different error shapes
+    const msg = err?.message ||
+                err?.response?.data?.message ||
+                (err?.originalError && err.originalError.message) ||
+                'Failed to update booking';
+    this.showToast(msg, 'error');
+    // rethrow if caller needs to handle it
+    throw err;
+  }
+}
+
+   /** async handleBookingAction(bookingId, action) {
+  try {
+    let status;
+    switch(action) {
+      case 'accept':
+      case 'confirmed':
+        status = 'confirmed';
+        break;
+      case 'decline':
+        status = 'declined';
+        break;
+      case 'completed':
+        // When artisan marks as completed, set status to 'pending_confirmation'
+        if (this.state.user.role === 'artisan') {
+          status = 'pending_confirmation';
+        } else {
+          status = 'completed';
+        }
+        break;
+      case 'confirm_completion':
+        // Client confirms the completion
+        status = 'completed';
+        break;
+      case 'reject_completion':
+        // Client rejects completion, returns to confirmed
+        status = 'confirmed';
+        break;
+      default:
+        status = action;
+    }
+
+    await API.updateBookingStatus(bookingId, status);
+    
+    let message;
+    if (status === 'pending_confirmation') {
+      message = 'Job marked as completed. Waiting for client confirmation.';
+    } else if (status === 'completed' && action === 'confirm_completion') {
+      message = 'Job completion confirmed. Payment can now be processed.';
+    } else if (status === 'confirmed' && action === 'reject_completion') {
+      message = 'Job completion rejected. Booking returned to confirmed status.';
+    } else {
+      message = `Booking ${status} successfully`;
+    }
+    
+    this.showToast(message, 'success');
+    
+    // Refresh the current modal
+    if (this.state.user.role === 'artisan') {
+      this.openMyClients();
+    } else {
+      this.openMyBookings();
+    }
+    
+    console.log('Status to send:', status); // Debug log
+    
+    const result = await API.updateBookingStatus(bookingId, status);
+    console.log('API result:', result); // Debug log
+    
+    
+  } catch (error) {
+    console.error('Failed to update booking:', error);
+    this.showToast('Failed to update booking', 'error');
+  }
+}**/
+  /**async handleBookingAction(bookingId, action) {
     try {
       let status;
       switch(action) {
@@ -2164,12 +2739,115 @@ async openArtisanProfile(artisanId) {
       console.error(`Failed to update booking:`, error);
       this.showToast(`Failed to update booking`, 'error');
     }
-  }
+  }**/
 
   // User Bookings
    
-  
-    async openMyBookings() {
+  async openMyBookings() {
+  if (!this.state.user) {
+    this.openLoginModal();
+    return;
+  }
+
+  try {
+    const bookings = await API.getUserBookings(this.state.user.id);
+    
+    const html = `
+      <div class="my-bookings-modal" style="width: 100% !important; height: 100% !important;">
+        <h2>My Bookings</h2>
+        <p class="muted">Track your service requests and appointments</p>
+        
+        <div class="bookings-list">
+          ${bookings.length ? bookings.map(booking => {
+            let statusText = (booking.status || 'pending').toUpperCase();
+            let statusClass = booking.status || 'pending';
+            
+            if (booking.status === 'pending_confirmation') {
+              statusText = 'AWAITING YOUR CONFIRMATION';
+              statusClass = 'pending-confirmation';
+            }
+            
+            return `
+              <div class="booking-item">
+                <div class="booking-header">
+                  <strong>${this.escapeHtml(booking.service)}</strong>
+                  <span class="status-badge status-${statusClass}">${statusText}</span>
+                </div>
+                <p class="muted">with ${this.escapeHtml(booking.artisanName || 'Artisan')}</p>
+                <p><i class="fas fa-calendar"></i> ${new Date(booking.date).toLocaleDateString()} at ${booking.time}</p>
+                <p><i class="fas fa-map-marker-alt"></i> ${this.escapeHtml(booking.location || 'Location TBD')}</p>
+                <p><i class="fas fa-money-bill"></i> Amount: ${this.formatCurrency(booking.amount || 0)}</p>
+                
+                ${booking.status === 'pending_confirmation' ? `
+                  <div class="urgent-notice">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Action Required:</strong> Artisan has marked this job as completed. Please review and confirm.
+                  </div>
+                ` : ''}
+                
+                <div class="booking-actions">
+                  ${booking.status === 'pending' ? `
+                    <button class="link-btn cancel-booking" data-id="${booking.id}">Cancel</button>
+                  ` : ''}
+                  ${booking.status === 'pending_confirmation' ? `
+                    <button class="btn-cta confirm-completion-btn" data-id="${booking.id}">Confirm Completion</button>
+                    <button class="link-btn reject-completion-btn" data-id="${booking.id}">Reject</button>
+                  ` : ''}
+                  ${booking.status === 'completed' && this.state.user.role === 'client' ? `
+                    <button class="btn-cta review-booking" data-id="${booking.id}" data-artisan="${booking.artisanId}">Leave Review</button>
+                  ` : ''}
+                  <button class="link-btn view-booking-details" data-id="${booking.id}">Details</button>
+                </div>
+              </div>
+            `;
+          }).join('') : '<p class="muted">No bookings yet. Start by booking an artisan!</p>'}
+        </div>
+
+        <div style="text-align: center; margin-top: 20px;">
+          <button id="close-bookings" class="link-btn">Close</button>
+        </div>
+      </div>
+    `;
+    
+    this.showModal(html, () => {
+      this.$$('.cancel-booking').forEach(btn => {
+        btn.addEventListener('click', (e) => this.cancelBooking(e.target.dataset.id));
+      });
+      
+      this.$$('.view-booking-details').forEach(btn => {
+        btn.addEventListener('click', (e) => this.openBookingDetails(e.target.dataset.id));
+      });
+
+      this.$$('.review-booking').forEach(btn => {
+        btn.addEventListener('click', (e) => this.openReviewModal(e.target.dataset.id, e.target.dataset.artisan));
+      });
+
+      // New handlers for completion confirmation
+      this.$$('.confirm-completion-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          if (confirm('Are you satisfied with the completed work?')) {
+            this.handleBookingAction(e.target.dataset.id, 'confirm_completion');
+          }
+        });
+      });
+
+      this.$$('.reject-completion-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          if (confirm('Are you sure the work is not completed to your satisfaction? This will return the booking to active status.')) {
+            this.handleBookingAction(e.target.dataset.id, 'reject_completion');
+          }
+        });
+      });
+      
+      this.$('#close-bookings')?.addEventListener('click', () => this.hideModal());
+    });
+
+  } catch (error) {
+    console.error('Failed to load bookings:', error);
+    this.showToast('Failed to load bookings', 'error');
+  }
+}
+    /**async openMyBookings() {
     if (!this.state.user) {
       this.openLoginModal();
       return;
@@ -2235,9 +2913,190 @@ async openArtisanProfile(artisanId) {
       console.error('Failed to load bookings:', error);
       this.showToast('Failed to load bookings', 'error');
     }
-  }
+  }**/
+  
   
   async openBookingDetails(bookingId) {
+  try {
+    const bookings = await API.getUserBookings();
+    const booking = bookings.find(b => b.id === bookingId);
+    
+    if (!booking) {
+      this.showToast('Booking not found', 'error');
+      return;
+    }
+
+    // Count completed jobs exactly like in user stats
+    let artisanCompletedJobs = 0;
+    if (booking.artisanId && this.state.user.role === 'client') {
+      try {
+        const artisanBookings = await pb.collection('bookings').getFullList({
+          filter: `artisan.id = "${booking.artisanId}"`
+        });
+        artisanCompletedJobs = artisanBookings.filter(b => b.status === 'completed').length;
+      } catch (error) {
+        console.error('Failed to count completed jobs:', error);
+      }
+    }
+
+    // Status display logic
+    let statusText = (booking.status || 'pending').toUpperCase();
+    let statusClass = booking.status || 'pending';
+    
+    if (booking.status === 'pending_confirmation') {
+      statusText = 'AWAITING CLIENT CONFIRMATION';
+      statusClass = 'pending-confirmation';
+    }
+
+    const html = `
+      <div class="booking-details-modal">
+        <h2>Booking Details</h2>
+        
+        <div class="booking-info-card">
+          <div class="booking-ref">
+            <strong>Reference: ${booking.reference || 'N/A'}</strong>
+            <span class="status-badge status-${statusClass}">${statusText}</span>
+          </div>
+          
+          <div class="booking-service">
+            <h4>${this.escapeHtml(booking.service)}</h4>
+            <p class="muted">${this.escapeHtml(booking.description)}</p>
+          </div>
+          
+          <div class="booking-details-grid">
+            <div class="detail-item">
+              <i class="fas fa-user"></i>
+              <span>${this.state.user.role === 'client' ? 'Artisan' : 'Client'}: 
+                <strong>${this.escapeHtml(this.state.user.role === 'client' ? booking.artisanName : booking.clientName)}</strong>
+                ${this.state.user.role === 'client' ? 
+                  `<br><small class="muted"><i class="fas fa-check-circle"></i> ${artisanCompletedJobs} completed jobs</small>` 
+                  : ''}
+              </span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-calendar"></i>
+              <span>Date: <strong>${new Date(booking.date).toLocaleDateString()}</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-clock"></i>
+              <span>Time: <strong>${booking.time}</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-map-marker-alt"></i>
+              <span>Location: <strong>${this.escapeHtml(booking.location || 'TBD')}</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-money-bill"></i>
+              <span>Amount: <strong>${this.formatCurrency(booking.amount || 0)}</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-credit-card"></i>
+              <span>Payment: <strong>${this.escapeHtml(booking.paymentMethod || 'TBD')}</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-file-text"></i>
+              <span>Description: <strong>${this.escapeHtml(booking.description || 'No description')}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="booking-actions-modal">
+          ${booking.status === 'pending' && this.state.user.role === 'artisan' ? `
+            <button id="confirm-booking-detail" class="btn-primary" data-id="${booking.id}">
+              <i class="fas fa-check"></i> Accept Booking
+            </button>
+            <button id="decline-booking-detail" class="link-btn" data-id="${booking.id}">
+              Decline
+            </button>
+          ` : ''}
+          
+          ${booking.status === 'confirmed' && this.state.user.role === 'artisan' ? `
+            <button id="complete-booking-detail" class="btn-primary" data-id="${booking.id}">
+              <i class="fas fa-check-circle"></i> Mark as Completed
+            </button>
+          ` : ''}
+          
+          ${booking.status === 'pending_confirmation' && this.state.user.role === 'client' ? `
+            <div class="confirmation-section">
+              <h4>Artisan has marked this job as completed. Please confirm:</h4>
+              <div style="display: flex; gap: 12px; margin-top: 16px;">
+                <button id="confirm-completion" class="btn-primary" data-id="${booking.id}">
+                  <i class="fas fa-check"></i> Confirm Completion
+                </button>
+                <button id="reject-completion" class="link-btn" data-id="${booking.id}">
+                  <i class="fas fa-times"></i> Reject - Work Not Complete
+                </button>
+              </div>
+            </div>
+          ` : ''}
+          
+          ${booking.status === 'pending_confirmation' && this.state.user.role === 'artisan' ? `
+            <div class="waiting-section">
+              <p class="muted">
+                <i class="fas fa-clock"></i> Waiting for client to confirm job completion...
+              </p>
+            </div>
+          ` : ''}
+          
+          ${booking.status === 'completed' && this.state.user.role === 'client' ? `
+            <button id="review-booking-detail" class="btn-primary" data-id="${booking.id}" data-artisan="${booking.artisanId}">
+              <i class="fas fa-star"></i> Leave Review
+            </button>
+          ` : ''}
+          
+          ${booking.status === 'completed' && this.state.user.role === 'artisan' ? `
+            <div class="completed-section">
+              <p style="color: var(--green);">
+                <i class="fas fa-check-circle"></i> Job completed and confirmed by client
+              </p>
+            </div>
+          ` : ''}
+        </div>
+
+        <div style="text-align: center; margin-top: 20px;">
+          <button id="close-booking-details" class="link-btn">Close</button>
+        </div>
+      </div>
+    `;
+
+    this.showModal(html, () => {
+      this.$('#confirm-booking-detail')?.addEventListener('click', (e) => {
+        this.handleBookingAction(e.target.dataset.id, 'confirmed');
+      });
+
+      this.$('#decline-booking-detail')?.addEventListener('click', (e) => {
+        this.handleBookingAction(e.target.dataset.id, 'declined');
+      });
+
+      this.$('#complete-booking-detail')?.addEventListener('click', (e) => {
+        if (confirm('Are you sure you have completed this job? The client will be asked to confirm.')) {
+          this.handleBookingAction(e.target.dataset.id, 'completed');
+        }
+      });
+      
+      this.$('#confirm-completion')?.addEventListener('click', (e) => {
+        if (confirm('Are you satisfied with the completed work?')) {
+          this.handleBookingAction(e.target.dataset.id, 'confirm_completion');
+        }
+      });
+      
+      this.$('#reject-completion')?.addEventListener('click', (e) => {
+        if (confirm('Are you sure the work is not completed to your satisfaction? This will return the booking to active status.')) {
+          this.handleBookingAction(e.target.dataset.id, 'reject_completion');
+        }
+      });
+      
+      this.$('#review-booking-detail')?.addEventListener('click', (e) => 
+        this.openReviewModal(e.target.dataset.id, e.target.dataset.artisan));
+      this.$('#close-booking-details')?.addEventListener('click', () => this.hideModal());
+    });
+
+  } catch (error) {
+    console.error('Failed to load booking details:', error);
+    this.showToast('Failed to load booking details', 'error');
+  }
+}
+ /** async openBookingDetails(bookingId) {
   try {
     const bookings = await API.getUserBookings();
     const booking = bookings.find(b => b.id === bookingId);
@@ -2368,7 +3227,7 @@ async openArtisanProfile(artisanId) {
       console.error('Failed to load booking details:', error);
       this.showToast('Failed to load booking details', 'error');
     }
-  }
+  }**/
 
   async cancelBooking(bookingId) {
     if (!confirm('Are you sure you want to cancel this booking?')) return;
@@ -3634,7 +4493,211 @@ async loadNotificationsPage() {
 }
 
 // LoadProfilePage 
+
+
 async loadProfilePage() {
+  const container = this.$('.profile-container');
+  if (!container) {
+    console.error('Profile container not found');
+    return;
+  }
+
+  // Not logged in
+  if (!pb.authStore.isValid || !pb.authStore.model) {
+    container.innerHTML = `
+      <div class="profile-header">
+        <h3>Welcome to Naco</h3>
+        <p>Please log in to view your profile</p>
+        <button id="login-from-profile" class="btn-primary">Login</button>
+      </div>
+    `;
+    // attach login button
+    const loginBtn = container.querySelector('#login-from-profile');
+    if (loginBtn) loginBtn.addEventListener('click', () => this.showAuthModal?.());
+    return;
+  }
+
+  // Use auth model as source of truth
+  const user = pb.authStore.model;
+
+  // Preload stats (safe fallbacks)
+  let totalBookings = 0, completedJobs = 0, favoritesCount = 0;
+  try {
+    const [bookings, favorites] = await Promise.allSettled([
+      API.getUserBookings?.() ?? Promise.resolve([]),
+      API.getUserFavorites?.() ?? Promise.resolve([]),
+    ]).then(results => results.map(r => (r.status === 'fulfilled' ? r.value : [])));
+
+    totalBookings = bookings.length || 0;
+    completedJobs = (bookings || []).filter(b => b.status === 'completed').length;
+    favoritesCount = (favorites || []).length;
+  } catch (e) {
+    console.warn('Profile stats load warning:', e);
+  }
+
+  const avatarUrl = user.avatar
+    ? pb.files.getUrl(user, user.avatar, { thumb: '200x200' })
+    : '../assets/avatar-placeholder.png';
+
+  // Build UI
+  container.innerHTML = `
+    <div class="profile-header">
+      <img src="${avatarUrl}" alt="Profile" class="profile-avatar-large">
+      <h3 class="profile-name">
+        ${this.escapeHtml(user.name || '')}
+        ${this.renderVerificationBadge?.(user) ?? ''}
+      </h3>
+      <p class="profile-role">${user.role === 'artisan' ? 'Artisan' : 'Client'}</p>
+
+      <div class="profile-stats">
+        <div class="profile-stat">
+          <div class="profile-stat-number">${totalBookings}</div>
+          <div class="profile-stat-label">Total Bookings</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-number">${completedJobs}</div>
+          <div class="profile-stat-label">Completed</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-number">${favoritesCount}</div>
+          <div class="profile-stat-label">Favorites</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-menu">
+      <button class="profile-menu-item" id="profile-bookings">
+        <i class="fas fa-calendar profile-menu-icon"></i>
+        <span>My Bookings</span>
+        <i class="fas fa-chevron-right" style="margin-left: auto;"></i>
+      </button>
+
+      <button class="profile-menu-item" id="profile-favorites">
+        <i class="fas fa-heart profile-menu-icon"></i>
+        <span>Favorites</span>
+        <i class="fas fa-chevron-right" style="margin-left: auto;"></i>
+      </button>
+
+      ${user.role === 'artisan' ? `
+        <button class="profile-menu-item" id="profile-clients">
+          <i class="fas fa-users profile-menu-icon"></i>
+          <span>My Clients</span>
+          <i class="fas fa-chevron-right" style="margin-left: auto;"></i>
+        </button>
+      ` : ''}
+
+      <button class="profile-menu-item" id="profile-settings">
+        <i class="fas fa-cog profile-menu-icon"></i>
+        <span>Settings</span>
+        <i class="fas fa-chevron-right" style="margin-left: auto;"></i>
+      </button>
+
+      <button class="profile-menu-item role-switch-item" id="role-switch-item">
+        <i class="fas fa-sync profile-menu-icon"></i>
+        <div style="flex: 1; display: flex; align-items: center; gap: 12px;">
+          <span id="role-switch-label">
+            Switch to ${user.role === 'artisan' ? 'Client' : 'Artisan'}
+          </span>
+          <label class="switch" style="margin-left: auto;">
+            <input type="checkbox" id="profile-role-switch" ${user.role === 'artisan' ? 'checked' : ''}>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </button>
+
+      <button class="profile-menu-item" id="profile-upgrade">
+        <i class="fas fa-star profile-menu-icon"></i>
+        <span>Upgrade to Premium</span>
+        <i class="fas fa-chevron-right" style="margin-left: auto;"></i>
+      </button>
+
+      <button class="profile-menu-item" id="profile-theme">
+        <i class="fas fa-palette profile-menu-icon"></i>
+        <span>Toggle Theme</span>
+        <i class="fas fa-chevron-right" style="margin-left: auto;"></i>
+      </button>
+
+      <button class="profile-menu-item danger" id="profile-logout">
+        <i class="fas fa-sign-out-alt profile-menu-icon"></i>
+        <span>Logout</span>
+      </button>
+    </div>
+  `;
+
+  // ---- Attach listeners AFTER markup is in the DOM ----
+  const roleSwitch = container.querySelector('#profile-role-switch');
+  const roleItem   = container.querySelector('#role-switch-item');
+  const roleLabel  = container.querySelector('#role-switch-label');
+  const roleTextEl = container.querySelector('.profile-role');
+
+  const setRoleUI = (role) => {
+    // Update visible role text and label
+    if (roleTextEl) roleTextEl.textContent = role === 'artisan' ? 'Artisan' : 'Client';
+    if (roleLabel)  roleLabel.textContent  = `Switch to ${role === 'artisan' ? 'Client' : 'Artisan'}`;
+    // Checkbox state (checked means artisan)
+    if (roleSwitch) roleSwitch.checked = (role === 'artisan');
+  };
+
+  // Make whole row clickable (except the checkbox itself)
+  if (roleItem) {
+    roleItem.addEventListener('click', (e) => {
+      if (e.target.closest('input[type="checkbox"]')) return; // ignore direct clicks on checkbox
+      roleSwitch.checked = !roleSwitch.checked;
+      roleSwitch.dispatchEvent(new Event('change', { bubbles: false }));
+    });
+  }
+
+  if (roleSwitch) {
+    roleSwitch.addEventListener('change', async (e) => {
+      const isChecked = e.target.checked;
+      const newRole = isChecked ? 'artisan' : 'client';
+      const currentRole = (this.state.user?.role || user.role);
+      const userId = pb.authStore.model.id;
+
+      if (newRole === currentRole) return;
+
+      roleSwitch.disabled = true;
+      roleItem?.classList.add('loading');
+      if (!this.state.user) {
+    this.showToast('Please login to switch roles', 'error');
+    return;
+  }
+
+      try {
+        // Update on server (also creates artisan profile if needed per your switchUserRole)
+        await API.switchUserRole(userId, newRole);
+
+        // Refresh auth store to get the latest user
+        await pb.collection('users').authRefresh();
+
+        // Sync app state (no full render to avoid flicker)
+        this.state.user = pb.authStore.model;
+        this.saveSession?.();
+
+        setRoleUI(this.state.user.role);
+        this.showToast?.(`Switched to ${this.state.user.role}`, 'success');
+      } catch (err) {
+        console.error('Role switch failed:', err);
+        // Revert toggle
+        e.target.checked = !isChecked;
+        this.showToast?.('Could not switch role. Please try again.', 'error');
+      } finally {
+        roleSwitch.disabled = false;
+        roleItem?.classList.remove('loading');
+      }
+    });
+  }
+
+  // Other menu buttons (guarded so no errors if methods aren’t present)
+  container.querySelector('#profile-bookings')?.addEventListener('click', () => this.openBookingsPage?.());
+  container.querySelector('#profile-favorites')?.addEventListener('click', () => this.openFavoritesPage?.());
+  container.querySelector('#profile-clients')?.addEventListener('click', () => this.openClientsPage?.());
+  container.querySelector('#profile-settings')?.addEventListener('click', () => this.openSettingsPage?.());
+  container.querySelector('#profile-upgrade')?.addEventListener('click', () => this.openUpgradeFlow?.());
+  container.querySelector('#profile-theme')?.addEventListener('click', () => this.toggleTheme?.());
+  container.querySelector('#profile-logout')?.addEventListener('click', () => this.logout?.());
+}
+/**async loadProfilePage() {
   const container = this.$('.profile-container');
   if (!container) {
     console.error('Profile container not found');
@@ -3740,7 +4803,7 @@ async loadProfilePage() {
       </button>
     </div>
   `;
-}
+}**/
 
     async openFavorites() {
     if (!this.state.user) {

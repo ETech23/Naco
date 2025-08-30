@@ -146,32 +146,62 @@ export async function updateUserProfile(userId, updates) {
   }
 }
 
+export async function uploadProfileImage(userId, file) {
+  try {
+    // Create FormData to handle file upload
+    const formData = new FormData();
+    formData.append("avatar", file); // "avatar" is the field name in your users collection
+
+    // Update the user with the uploaded file
+    const updatedUser = await pb.collection("users").update(userId, formData);
+
+    return updatedUser;
+  } catch (error) {
+    console.error("Profile image upload failed:", error);
+    throw error;
+  }
+}
+
 export async function switchUserRole(userId, newRole) {
   try {
     const updates = { role: newRole };
-    
-    // Create artisan profile if switching to artisan
+
     if (newRole === 'artisan') {
-      const existingProfile = await pb.collection('artisan_profiles')
-        .getFirstListItem(`user.id = "${userId}"`)
-        .catch(() => null);
-        
+      let existingProfile = null;
+
+      try {
+        existingProfile = await pb.collection('artisan_profiles')
+          .getFirstListItem(`user="${userId}"`);
+      } catch (err) {
+        if (err.status !== 404) throw err;
+      }
+
       if (!existingProfile) {
-        await pb.collection('artisan_profiles').create({
-          user: userId,
-          skill: 'General Services',
-          rate: 5000,
-          availability: 'Available',
+        console.log("No artisan profile found, creating one...");
+
+        const profileData = {
+          user: userId,                     // must be the actual relation ID
+          skill: 'General Services',        // make sure this matches schema type
+          rate: 5000,                       // number (check schema for type)
+          availability: 'Available',        // must match allowed values if enum
           rating: 0,
           completed_jobs: 0
-        });
+        };
+
+        try {
+          await pb.collection('artisan_profiles').create(profileData);
+          console.log("✅ Artisan profile created");
+        } catch (createErr) {
+          console.error("❌ Failed to create artisan profile:", createErr);
+          throw createErr;
+        }
       }
     }
 
     const user = await pb.collection('users').update(userId, updates);
     return user;
   } catch (error) {
-    console.error('Role switch failed:', error);
+    console.error('❌ Role switch failed:', error);
     throw error;
   }
 }
@@ -307,7 +337,7 @@ export async function getFullArtisanData(artisanId) {
     throw error;
   }
 }**/
-/**
+
 export async function searchArtisans(query = '', city = '') {
   try {
     let filter = 'role = "artisan"';
@@ -372,9 +402,9 @@ export async function searchArtisans(query = '', city = '') {
     console.error('Search failed:', error);
     return [];
   }
-}**/
+}
 
-export async function searchArtisans(query = '', city = '') {
+/**export async function searchArtisans(query = '', city = '') {
   try {
     let filter = 'role = "artisan"';
     
@@ -398,8 +428,30 @@ export async function searchArtisans(query = '', city = '') {
     return [];
   }
 }
+**/
+/**export async function searchArtisans(query, city = '') {
+  try {
+    if (!query || query.trim().length < 2) {
+      return [];
+    }
 
-        export async function createNotification(userId, notificationData) {
+    const searchTerm = query.trim();
+    const filter = `role = "artisan" && name ?~ "${searchTerm}"`;
+    
+    console.log('Filter being used:', filter);
+    
+    const artisans = await pb.collection('users').getFullList({
+      filter: filter
+    });
+
+    return artisans;
+  } catch (error) {
+    console.error('Exact error:', error);
+    console.error('Filter that failed:', filter);
+    return [];
+  }
+}**/
+ export async function createNotification(userId, notificationData) {
   try {
     const notification = await pb.collection('notifications').create({
       user: userId,
@@ -493,10 +545,143 @@ export async function getUserBookings(userId = null) {
   }
 }
 
+
 export async function updateBookingStatus(bookingId, status) {
   try {
+    const validStatuses = [
+      'pending', 'confirmed', 'declined', 'completed',
+      'pending_confirmation', 'confirm_completion',
+      'cancelled', 'in_progress'
+    ];
+    if (!validStatuses.includes(status)) {
+      throw new Error(`Invalid status: ${status}`);
+    }
+
+    // Handle special transitions
+    let actualStatus = status;
+    if (status === 'confirm_completion') {
+      actualStatus = 'completed';
+    } else if (status === 'reject_completion') {
+      actualStatus = 'confirmed';
+    }
+
+    // ✅ Proper update with expand
+    const booking = await pb.collection('bookings').update(
+      bookingId,
+      { status: actualStatus },
+      { expand: 'client,artisan' }
+    );
+
+    // Only increment completed jobs when client confirms
+    if (status === 'confirm_completion' && booking.expand?.artisan) {
+      const artisan = booking.expand.artisan;
+      const currentJobs = artisan.completed_jobs || 0;
+      await pb.collection('users').update(artisan.id, {
+        completed_jobs: currentJobs + 1
+      });
+    }
+
+    // Notifications
+    let recipientId, message, title;
+
+    if (actualStatus === 'confirmed' && status !== 'reject_completion') {
+      recipientId = booking.expand?.client?.id;
+      title = 'Booking Confirmed';
+      message = 'Your booking has been confirmed by the artisan';
+    } else if (actualStatus === 'pending_confirmation') {
+      recipientId = booking.expand?.client?.id;
+      title = 'Job Completed - Confirmation Required';
+      message = 'The artisan has marked your job as completed. Please review and confirm.';
+    } else if (actualStatus === 'completed' && status === 'confirm_completion') {
+      recipientId = booking.expand?.artisan?.id;
+      title = 'Job Confirmed Complete';
+      message = 'Client has confirmed job completion. Payment can now be processed.';
+    } else if (actualStatus === 'confirmed' && status === 'reject_completion') {
+      recipientId = booking.expand?.artisan?.id;
+      title = 'Completion Rejected';
+      message = 'Client has rejected job completion. Please review the work.';
+    } else if (actualStatus === 'declined') {
+      recipientId = booking.expand?.client?.id;
+      title = 'Booking Declined';
+      message = 'Your booking has been declined by the artisan';
+    }
+
+    if (recipientId && recipientId !== pb.authStore.model?.id) {
+      await createNotification(recipientId, {
+        type: 'booking',
+        title,
+        message,
+        data: { bookingId }
+      });
+    }
+
+    return booking;
+  } catch (error) {
+    console.error('Booking status update failed:', error);
+    throw error;
+  }
+}
+
+/**export async function updateBookingStatus(bookingId, status) {
+  try {
+    const validStatuses = [
+      'pending', 'confirmed', 'declined', 'completed',
+      'pending_confirmation', 'confirm_completion',
+      'cancelled', 'in_progress'
+    ];
+    if (!validStatuses.includes(status)) {
+      throw new Error(`Invalid status: ${status}`);
+    }
+
+    // Update booking & expand relations in one go
+    const booking = await pb.collection('bookings').update(bookingId, { status }, {
+      expand: 'client,artisan'
+    });
+
+    // If status is completed, increment artisan's completed jobs
+    if (status === 'completed' && booking.expand?.artisan) {
+      const artisan = booking.expand.artisan;
+      const currentJobs = artisan.completed_jobs || 0;
+
+      await pb.collection('users').update(artisan.id, {
+        completed_jobs: currentJobs + 1
+      });
+    }
+
+    // Prepare notification
+    let recipientId, message;
+    if (status === 'confirmed') {
+      recipientId = booking.expand?.client?.id;
+      message = 'Your booking has been confirmed by the artisan';
+    } else if (status === 'completed') {
+      recipientId = booking.expand?.client?.id;
+      message = 'Your booking has been completed. Please leave a review!';
+    } else if (status === 'declined') {
+      recipientId = booking.expand?.client?.id;
+      message = 'Your booking has been declined by the artisan';
+    }
+
+    // Send notification (if recipient is not the one updating)
+    if (recipientId && recipientId !== pb.authStore.model?.id) {
+      await createNotification(recipientId, {
+        type: 'booking',
+        title: 'Booking Update',
+        message,
+        data: { bookingId }
+      });
+    }
+
+    return booking;
+  } catch (error) {
+    console.error('Booking status update failed:', error);
+    throw error;
+  }
+}**/
+
+/**export async function updateBookingStatus(bookingId, status) {
+  try {
     // Validate status
-    const validStatuses = ['pending', 'confirmed', 'declined', 'completed', 'cancelled', 'in_progress'];
+    const validStatuses = ['pending', 'confirmed', 'declined', 'completed', 'pending_confirmation', 'confirm_completion', 'cancelled', 'in_progress'];
     if (!validStatuses.includes(status)) {
       throw new Error(`Invalid status: ${status}`);
     }
@@ -553,7 +738,7 @@ export async function updateBookingStatus(bookingId, status) {
     console.error('Booking status update failed:', error);
     throw error;
   }
-}
+}**/
 
 // Review Functions
 export async function getReviewsForArtisan(artisanId) {
