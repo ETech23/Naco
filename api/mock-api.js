@@ -1,8 +1,12 @@
-// PocketBase API Integration for Naco
-// Replace your api/mock-api.js with this file
+// Detect environment and use appropriate API URL
+const API_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:8091'  // Local development
+  : 'https://naco-backend-r0hn.onrender.com';  // Production
 
-// Initialize PocketBase instance
-const pb = new PocketBase('http://localhost:8091');
+export const pb = new PocketBase(API_URL);
+
+
+// Initialize PocketBase instance const pb = new PocketBase('http://localhost:8091');
 
 // Helper function to format artisan data
 /**function formatArtisanData(user, completedJobsCount = null) {
@@ -995,5 +999,4 @@ export function unsubscribe(subscription) {
   }
 }
 
-// Export pb instance for advanced usage
-export { pb };
+// Export pb instance for advanced usage export { pb };

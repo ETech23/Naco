@@ -1,6 +1,8 @@
 // Naco - Modern Artisan Finder App
 // Complete JavaScript implementation with React-like patterns
 
+
+
 import * as API from '../../api/mock-api.js';
 import { pb } from '../../api/mock-api.js';
 
