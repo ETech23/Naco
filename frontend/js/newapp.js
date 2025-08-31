@@ -7,8 +7,8 @@ import * as API from '../../api/mock-api.js';
 import { pb } from '../../api/mock-api.js';
 **/
 
-import * as API from '../api/mock-api.js';
-import { pb } from '../api/mock-api.js';
+import * as API from './mock-api.js';
+import { pb } from './mock-api.js';
 
 class NacoApp {
   constructor() {
