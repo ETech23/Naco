@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  
+  <meta name="color-scheme" content="light dark">
+  <title>Naco — Find Trusted Artisans</title>
+
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f7a4a">
+</head>
+<body>
+  <div id="app" class="app">
+    
+    <header class="app-header" style="margin-bottom: 0;">
+  <div class="header-container">
+    <!-- Left Section -->
+    <div class="header-left">
+      <div class="brand">
+        <img src="assets/naco.png" alt="Naco" class="brand-icon" onclick="window.location.reload()">
+        <!--<img src="../assets/naco.png" alt="Naco" class="brand-icon" onclick="window.location.reload"> -->
+        <!--<span class="brand-name">Naco</span>-->
+      </div>
+    </div>
+
+    <!-- Center Section - Search -->
+    <div class="header-center">
+      <div class="search-container">
+        <i class="fas fa-search search-icon"></i>
+        <input 
+          id="search-input" 
+          placeholder="Search artisans, services..." 
+          class="search-input"
+          readonly
+        >
+      </div>
+    </div>
+
+    <!-- Right Section -->
+    <div class="header-right">
+      <div class="header-icons">
+        <button id="notif-btn" class="header-icon-btn" title="Notifications">
+          <i class="fas fa-bell"></i>
+          <span id="notif-count" class="notification-badge hidden">0</span>
+        </button>
+        
+        <!-- <button id="menu-btn" class="header-icon-btn mobile-only" title="Menu">
+          <i class="fas fa-bars"></i>
+        </button>-->
+        
+        <button id="profile-btn" class="header-icon-btn mobile-only" title="Profile">
+          <i class="fas fa-bars"></i>
+          <!--  <img id="profile-pic" src="assets/avatar-placeholder.png" alt="Profile" class="profile-avatar">-->
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+    
+    <main class="main">
+      <section class="hero card">
+        <div class="hero-info">
+          <h1>Find trusted artisans & professionals near you</h1>
+          <p class="muted">Quickly connect with verified craftsmen in your city. Premium/verified artisans are featured at the top.</p>
+          <div id="quick-cats" class="chips"></div>
+        </div>
+        <div class="hero-cta">
+          <button id="install-btn" class="btn-primary hidden">
+  <i class="fas fa-download"></i>Install App
+</button>
+        </div>
+      </section>
+
+      <section class="section" style="background: var(--card); border-radius: 12px; border-color: var(--green);
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);">
+        <div class="section-head">
+          <h2 id="featured-label">Featured Artisans</h2>
+          <button id="view-all-featured" class="link-btn">View all</button>
+        </div>
+        <div id="featured-wrap">
+          <div id="featured-list" class="list horizontal"></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>Search Results</h2>
+          <div class="muted">Matches based on skill & location — premium first</div>
+        </div>
+        <div id="results-list" class="list grid"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>Latest Reviews</h2>
+        </div>
+        <div id="reviews-list" class="list review-list"></div>
+      </section>
+    </main>
+
+<!-- Full-screen pages that will be shown/hidden -->
+<div id="search-page" class="full-page hidden">
+  <div class="page-header">
+    <button id="close-search" class="close-btn">
+      <i class="fas fa-arrow-left"></i>
+    </button>
+    <h2>Search</h2>
+  </div>
+  <div class="page-content">
+    <div class="search-form">
+      <div class="search-input-container">
+        <i class="fas fa-search"></i>
+        <input id="main-search-input" placeholder="Search for artisans, services..." autofocus>
+        <button id="clear-search" class="clear-btn hidden">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <select id="search-city-select" class="city-select">
+        <option value="">All Cities</option>
+      </select>
+    </div>
+    
+    <div class="search-suggestions">
+      <h3>Popular Searches</h3>
+      <div id="search-quick-cats" class="search-chips"></div>
+    </div>
+    
+    <div id="search-results-container" class="search-results hidden">
+      <h3>Search Results</h3>
+      <div id="search-results-list" class="results-grid"></div>
+    </div>
+  </div>
+</div>
+
+<div id="notifications-page" class="full-page hidden">
+  <div class="page-header">
+    <button id="close-notifications" class="close-btn">
+      <i class="fas fa-arrow-left"></i>
+    </button>
+    <h2>Notifications</h2>
+    <button id="mark-all-read" class="header-action-btn hidden">
+      Mark All Read
+    </button>
+  </div>
+  <div class="page-content">
+    <div id="notifications-content" class="notifications-container">
+      <!-- Notifications will be loaded here -->
+    </div>
+  </div>
+</div> 
+
+<div id="profile-page" class="full-page hidden">
+  <div class="page-header">
+    <button id="close-profile" class="close-btn">
+      <i class="fas fa-arrow-left"></i>
+    </button>
+    <h2>Profile</h2>
+    <button id="edit-profile" class="header-action-btn">
+      <i class="fas fa-edit"></i>
+    </button>
+  </div>
+  <div class="page-content">
+    <div class="profile-container">
+      <!-- Profile content will be loaded here -->
+    </div>
+  </div>
+</div>
+  </div>
+</div>
+    
+
+    <button id="fab-book" class="fab" title="Quick Book">
+      <i class="fas fa-calendar-plus"></i>
+    </button>
+
+  
+   <!-- PocketBase SDKyour -->
+  <script src="https://unpkg.com/pocketbase@0.20.0/dist/pocketbase.umd.js"></script>
+
+<script src="js/native-navigation.js"></script>
+  <script type="module" src="js/newapp.js"></script>
+</body>
+</html>
