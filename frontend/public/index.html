@@ -12,20 +12,29 @@
 
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-
+    
+     <link rel="stylesheet" href="css/notificat ions.css">
   <link rel="stylesheet" href="css/style.css">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0f7a4a">
 </head>
 <body>
   <div id="app" class="app">
+      <div id="app-container"></div>
     
     <header class="app-header" style="margin-bottom: 0;">
   <div class="header-container">
     <!-- Left Section -->
     <div class="header-left">
-      <div class="brand">
-        <img src="assets/naco.png" alt="Naco" class="brand-icon" onclick="window.location.reload()">
+      <div class="brand" style="font-size: 1.5rem;       /* adjust as needed */
+  font-weight: 700;
+  background: linear-gradient(90deg, #556B2F, #c9b037);
+  -webkit-background-clip: text;   /* Safari & Chrome */
+  -webkit-text-fill-color: transparent;
+  background-clip: text;           /* Firefox */
+  color: transparent;              /* fallback */"  >
+          <p onclick="window.location.reload()">Naco</p>
+       <!-- <img src="assets/naco.png" alt="Naco" class="brand-icon" onclick="window.location.reload()">-->
         <!--<img src="../assets/naco.png" alt="Naco" class="brand-icon" onclick="window.location.reload"> -->
         <!--<span class="brand-name">Naco</span>-->
       </div>
@@ -64,6 +73,8 @@
     </div>
   </div>
 </header>
+
+   <!-- <button onclick="window.Naco.app.debugBookingDisplay()" style="background:blue;color:white;padding:10px;">Debug Bookings</button> -->
     
     <main class="main">
       <section class="hero card">
@@ -79,9 +90,9 @@
         </div>
       </section>
 
-      <section class="section" style="background: var(--card); border-radius: 12px; border-color: var(--green);
+      <section class="section" style="background: #556B2F; border-radius: 8px; border-color: var(--green);
   box-shadow: var(--shadow);
-  transform: translateY(-2px);">
+  transform: translateY(-2px); height: ;">
         <div class="section-head">
           <h2 id="featured-label">Featured Artisans</h2>
           <button id="view-all-featured" class="link-btn">View all</button>
@@ -181,12 +192,16 @@
     <button id="fab-book" class="fab" title="Quick Book">
       <i class="fas fa-calendar-plus"></i>
     </button>
+    
+    
+  
 
   
    <!-- PocketBase SDKyour -->
   <script src="https://unpkg.com/pocketbase@0.20.0/dist/pocketbase.umd.js"></script>
 
-<script src="js/native-navigation.js"></script>
-  <script type="module" src="js/newapp.js"></script>
+<script src="js/navigation.js"></script>
+
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>

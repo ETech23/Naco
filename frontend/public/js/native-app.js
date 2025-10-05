@@ -1,6 +1,34 @@
-// Import your existing app logic
-import { /* your existing imports */ } from './newapp.js';
+// Minimal NativeAppRouter (self-contained)
+class NativeAppRouter {
+  constructor() {
+    this.routes = {};
+    this.history = [];
+  }
 
+  registerRoute(name, callback) {
+    this.routes[name] = callback;
+  }
+
+  navigateTo(name, data = {}, pushHistory = true) {
+    if (this.routes[name]) {
+      const container = document.querySelector('#app .main');
+      if (!container) {
+        console.error("App container not found!");
+        return;
+      }
+      if (pushHistory) this.history.push({ name, data });
+      this.routes[name](container, data);
+    }
+  }
+
+  goBack() {
+    this.history.pop();
+    const prev = this.history[this.history.length - 1];
+    if (prev) this.navigateTo(prev.name, prev.data, false);
+  }
+}
+
+// Main NativeApp
 class NativeApp {
   constructor() {
     this.router = new NativeAppRouter();
@@ -47,7 +75,6 @@ class NativeApp {
         </div>
       </div>
       <div class="page-content">
-        <!-- Your existing home content -->
         <section class="hero card">
           <div class="hero-info">
             <h1>Find trusted artisans & professionals near you</h1>
@@ -73,8 +100,7 @@ class NativeApp {
       </div>
     `;
     
-    // Bind your existing home page logic
-    this.bindHomeEvents();
+    this.bindHomeEvents?.();
   }
 
   renderSearchPage(container, data) {
@@ -116,7 +142,7 @@ class NativeApp {
       </div>
     `;
     
-    this.bindSearchEvents();
+    this.bindSearchEvents?.();
   }
 
   renderArtisanProfile(container, data) {
@@ -141,8 +167,7 @@ class NativeApp {
       </div>
     `;
     
-    // Load your existing artisan profile logic
-    this.loadAndDisplayArtisanProfile(artisanId);
+    this.loadAndDisplayArtisanProfile?.(artisanId);
   }
 
   renderProfilePage(container, data) {
@@ -153,19 +178,17 @@ class NativeApp {
           <h1 class="header-title">Profile</h1>
         </div>
         <div class="header-right">
-          <button class="header-action-btn" onclick="this.editProfile()">
+          <button class="header-action-btn" onclick="window.app.editProfile?.()">
             <i class="fas fa-edit"></i>
           </button>
         </div>
       </div>
       <div class="page-content">
-        <div id="profile-content">
-          <!-- Your existing profile content -->
-        </div>
+        <div id="profile-content"></div>
       </div>
     `;
     
-    this.loadUserProfile();
+    this.loadUserProfile?.();
   }
 
   renderBookingsPage(container, data) {
@@ -178,13 +201,11 @@ class NativeApp {
         <div class="header-right"></div>
       </div>
       <div class="page-content">
-        <div id="bookings-content">
-          Loading bookings...
-        </div>
+        <div id="bookings-content">Loading bookings...</div>
       </div>
     `;
     
-    this.loadUserBookings();
+    this.loadUserBookings?.();
   }
 
   renderNotificationsPage(container, data) {
@@ -200,22 +221,19 @@ class NativeApp {
           <h1 class="header-title">Notifications</h1>
         </div>
         <div class="header-right">
-          <button class="header-action-btn" onclick="this.markAllNotificationsRead()">
+          <button class="header-action-btn" onclick="window.app.markAllNotificationsRead?.()">
             <i class="fas fa-check-double"></i>
           </button>
         </div>
       </div>
       <div class="page-content">
-        <div id="notifications-content">
-          Loading notifications...
-        </div>
+        <div id="notifications-content">Loading notifications...</div>
       </div>
     `;
     
-    this.loadNotifications();
+    this.loadNotifications?.();
   }
 
-  // Update your existing methods to work with native navigation
   openArtisanProfile(artisanId) {
     window.appRouter.navigateTo('artisan-profile', { artisanId });
   }
@@ -223,8 +241,6 @@ class NativeApp {
   openSearchPage() {
     window.appRouter.navigateTo('search');
   }
-
-  // Add other existing methods here...
 }
 
 // Tab navigation helper
@@ -235,16 +251,18 @@ function navigateToTab(route) {
 // Global loading helpers
 function showLoading(text = 'Loading...') {
   const loading = document.getElementById('native-loading');
-  loading.querySelector('.loading-text').textContent = text;
-  loading.style.display = 'flex';
+  if (loading) {
+    loading.querySelector('.loading-text').textContent = text;
+    loading.style.display = 'flex';
+  }
 }
 
 function hideLoading() {
-  document.getElementById('native-loading').style.display = 'none';
+  const loading = document.getElementById('native-loading');
+  if (loading) loading.style.display = 'none';
 }
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   new NativeApp();
 });
-

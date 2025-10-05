@@ -1,707 +1,747 @@
-/*********************************************************
- * Naco Service Worker (Full Replacement)
- * - Static cache + API cache with safe strategies
- * - No caching for artisan details (users getOne)
- * - Correct host/port (localhost:8091)
- * - Force-refresh clients after activation
- **********************************************************/
+/**************************************************************
+ * NACO - Robust Service Worker (FULL from-scratch implementation)
+ *
+ * Features:
+ * - Precaching (app shell) with versioning
+ * - Runtime caching strategies:
+ *    - cache-first for static assets (app shell)
+ *    - cache-first for images
+ *    - network-first for API routes with cache fallback
+ *    - cache-first with timeout for external CDNs
+ * - Never-cache rule for artisan detail endpoints (live-only)
+ * - Background Sync (outbox) that queues failed POST/PUT/DELETE JSON requests
+ * - Offline analytics queue (stores events and flushes on connectivity or sync)
+ * - Push notifications + notification click handling
+ * - Robust activation & cache cleanup
+ * - Client messaging API (SKIP_WAITING, CLEAR_CACHE, GET_VERSION, FORCE_RELOAD)
+ * - IndexedDB implementation (lightweight) for persistent queues
+ *
+ * Notes:
+ * - This SW intentionally queues JSON request bodies only (serializable).
+ *   Files/form-data are not queued. If you need offline uploads, add a
+ *   separate strategy (upload to IndexedDB Blob store) — more complex.
+ * - Update STATIC_VERSION / API_VERSInON to force clients to update caches.
+ *
+ * Drop this file into your project (e.g. /sw.js) and register it from the client.
+ **************************************************************/
 
-// ---- VERSIONED CACHE NAMES (bump these to ship updates) ----
-const CACHE_NAME = 'naco-static-v6.1.2';       // ← bump when static files change
-const API_CACHE_NAME = 'naco-api-v4.1.2';      // ← bump when API strategy changes
+// ---------------- CONFIG / VERSIONING ----------------
+const STATIC_VERSION = 'v1.5.3';   // bump when static files change
+const API_VERSION = 'v1.5.3';      // bump when api caching behavior should reset
 
-// ---- STATIC FILES TO PRECACHE (yours preserved) ----
-const FILES_TO_CACHE = [
+const STATIC_CACHE = `naco-static-${STATIC_VERSION}`;
+const API_CACHE = `naco-api-${API_VERSION}`;
+const IMAGE_CACHE = `naco-images-${STATIC_VERSION}`;
+const ANALYTICS_STORE = 'naco-analytics';
+const OUTBOX_STORE = 'naco-outbox';
+const DB_NAME = 'naco-sw-db';
+const DB_VERSION = 1;
+
+// The base path of your frontend. Adjust if your app is served from a subpath.
+const BASE_PATH = '/frontend/public';
+
+// Files to precache (keep up-to-date with your deployed files).
+const PRECACHE_URLS = [
   '/',
-  '/frontend/',
-  '/frontend/index.html',
-  '/frontend/css/style.css',
-  '/frontend/js/app.js',
-  '/frontend/api/mock-api.js',
-  '/frontend/manifest.json',
-  '/frontend/assets/icon-192.png',
-  '/frontend/assets/icon-512.png',
-  '/frontend/assets/avatar-placeholder.png',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css',
-  'https://unpkg.com/pocketbase@0.20.0/dist/pocketbase.umd.js'
+  `${BASE_PATH}/`,
+  `${BASE_PATH}/index.html`,
+  `${BASE_PATH}/css/style.css`,
+  `${BASE_PATH}/js/app.js`,
+  `${BASE_PATH}/js/api.js`,
+  `${BASE_PATH}/manifest.json`,
+  `${BASE_PATH}/assets/icon-192.png`,
+  `${BASE_PATH}/assets/icon-512.png`,
+  `${BASE_PATH}/assets/avatar-placeholder.png`,
+  // Add other essential static files here (no query params)
 ];
 
-// ---- HOSTS / ROUTING HELPERS ----
-const LOCAL_APP_ORIGIN = self.location.origin; // where your frontend is served from
-const POCKETBASE_ORIGINS = new Set([
-  'http://localhost:8091',  // ← your PB host/port
-  'http://127.0.0.1:8091'
-  // add production PB origin(s) here when you deploy
-]);
+// External CDN timeout for network attempts (ms)
+const EXTERNAL_TIMEOUT = 5000;
 
-// Identify PocketBase API calls
-function isPocketBaseAPI(url) {
-  return POCKETBASE_ORIGINS.has(url.origin) && url.pathname.startsWith('/api/');
+// Which origins are considered external / CDN? This will be used for external caching policy.
+const EXTERNAL_ORIGINS = [
+  'https://fonts.googleapis.com',
+  'https://fonts.gstatic.com',
+  'https://cdnjs.cloudflare.com',
+  'https://unpkg.com',
+  'https://cdn.jsdelivr.net'
+];
+
+// ----------------- IndexedDB Helper (minimal) -----------------
+// Simple promise-based IndexedDB wrapper for two stores: OUTBOX and ANALYTICS
+const idb = (() => {
+  let dbPromise = null;
+
+  function openDB() {
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onerror = (e) => reject(e.target.error);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(OUTBOX_STORE)) {
+          db.createObjectStore(OUTBOX_STORE, { keyPath: 'id', autoIncrement: true });
+        }
+        if (!db.objectStoreNames.contains(ANALYTICS_STORE)) {
+          db.createObjectStore(ANALYTICS_STORE, { keyPath: 'id', autoIncrement: true });
+        }
+      };
+      req.onsuccess = (e) => resolve(e.target.result);
+    });
+    return dbPromise;
+  }
+
+  async function add(storeName, value) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      tx.onerror = () => reject(tx.error);
+      const store = tx.objectStore(storeName);
+      const req = store.add(value);
+      req.onsuccess = (ev) => resolve(ev.target.result);
+    });
+  }
+  
+  self.addEventListener('message', (event) => {
+  const data = event.data || {};
+  if (data.type === 'SKIP_WAITING') {
+    self.skipWaiting(); // This forces immediate activation
+  }
+});
+
+  async function getAll(storeName) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readonly');
+      tx.onerror = () => reject(tx.error);
+      const store = tx.objectStore(storeName);
+      const req = store.getAll();
+      req.onsuccess = (ev) => resolve(ev.target.result);
+    });
+  }
+
+  async function deleteByKey(storeName, key) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      tx.onerror = () => reject(tx.error);
+      const store = tx.objectStore(storeName);
+      const req = store.delete(key);
+      req.onsuccess = () => resolve();
+    });
+  }
+
+  async function clear(storeName) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      tx.onerror = () => reject(tx.error);
+      tx.objectStore(storeName).clear();
+      tx.oncomplete = () => resolve();
+    });
+  }
+
+  return { add, getAll, deleteByKey, clear };
+})();
+
+// ----------------- Utility helpers -----------------
+function isExternalOrigin(url) {
+  try {
+    const u = new URL(url);
+    return EXTERNAL_ORIGINS.some(origin => u.origin === origin);
+  } catch (e) {
+    return false;
+  }
 }
 
-// Identify “artisan details” requests that must NEVER be cached
-// PocketBase getOne for users = /api/collections/users/records/:id
-function isArtisanDetails(url) {
-  // strict path check for users → records → specific id
-  return url.pathname.startsWith('/api/collections/users/records/');
+function normalizeRequestForCache(request) {
+  // strip query and hash
+  const u = new URL(request.url);
+  return `${u.origin}${u.pathname}`;
 }
 
-// Identify same-origin static asset (match by path from FILES_TO_CACHE)
-function isStaticAsset(url) {
-  // Only check path (ignore query params)
-  return FILES_TO_CACHE.some((asset) => {
+function isNavigationRequest(request) {
+  return request.mode === 'navigate' || (request.method === 'GET' && request.headers.get('accept')?.includes('text/html'));
+}
+
+// Define pattern for artisan details (never cache). Adjust to your API routes.
+function isArtisanDetailsUrl(url) {
+  try {
+    const u = new URL(url);
+    // example endpoints:
+    // /artisans/:id or /users/:id or /api/collections/users/records/:id
+    if (/^\/artisans\/[0-9a-fA-F]{24}(\/)?$/.test(u.pathname)) return true;
+    if (/^\/users\/[0-9a-fA-F]{24}(\/)?$/.test(u.pathname)) return true;
+    if (u.pathname.startsWith('/api/collections/users/records/')) return true;
+  } catch (e) {}
+  return false;
+}
+
+function isApiRequest(request) {
+  try {
+    const u = new URL(request.url);
+    // consider API endpoints: /auth, /users, /artisans, /bookings, /reviews, /notifications, /favorites
+    const apiPrefixes = ['/auth', '/users', '/artisans', '/bookings', '/reviews', '/notifications', '/favorites', '/api/'];
+    return apiPrefixes.some(p => u.pathname.startsWith(p));
+  } catch (e) {
+    return false;
+  }
+}
+
+function isImageRequest(request) {
+  return /\.(png|jpg|jpeg|gif|webp|avif|svg)$/.test(new URL(request.url).pathname);
+}
+
+function cloneHeaders(headers) {
+  const obj = {};
+  for (const [k, v] of headers.entries()) obj[k] = v;
+  return obj;
+}
+
+// Serialize a request for queueing (only JSON bodies supported)
+async function serializeRequest(request) {
+  const headers = cloneHeaders(request.headers);
+  const serialized = {
+    url: request.url,
+    method: request.method,
+    headers,
+    timestamp: Date.now()
+  };
+
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    // Try to read JSON body; if not JSON, we won't queue
     try {
-      const assetUrl = new URL(asset, LOCAL_APP_ORIGIN);
-      return url.origin === assetUrl.origin && url.pathname === assetUrl.pathname;
-    } catch {
-      // External absolute URLs in FILES_TO_CACHE (CDNs) get handled elsewhere
-      return false;
+      const clone = request.clone();
+      const text = await clone.text();
+      // If body is empty, store null
+      serialized.body = text ? text : null;
+      // mark if content-type was json
+      const contentType = headers['content-type'] || headers['Content-Type'];
+      serialized.isJSON = contentType && contentType.indexOf('application/json') !== -1;
+    } catch (e) {
+      serialized.body = null;
+      serialized.isJSON = false;
     }
+  } else {
+    serialized.body = null;
+    serialized.isJSON = false;
+  }
+
+  return serialized;
+}
+
+// Reconstruct a Request from serialized object (JSON only bodies)
+function buildRequestFromSerialized(serialized) {
+  const headers = new Headers(serialized.headers || {});
+  let body = null;
+  if (serialized.body && serialized.isJSON) {
+    body = serialized.body;
+  }
+  return new Request(serialized.url, {
+    method: serialized.method,
+    headers,
+    body
   });
 }
 
-// Identify external (CDN, fonts, etc.)
-function isExternal(url) {
-  return url.origin !== LOCAL_APP_ORIGIN && !POCKETBASE_ORIGINS.has(url.origin);
+// Post message helper to clients
+async function broadcastMessage(message) {
+  const clients = await self.clients.matchAll({ includeUncontrolled: true });
+  for (const client of clients) {
+    try {
+      client.postMessage(message);
+    } catch (e) {
+      console.warn('[SW] broadcastMessage failed', e);
+    }
+  }
 }
 
 // ---------------- INSTALL ----------------
-self.addEventListener('install', (evt) => {
-  console.log('[ServiceWorker] Install');
-  evt.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('[ServiceWorker] Pre-caching app shell');
-        return cache.addAll(FILES_TO_CACHE);
-      })
-      .catch(err => console.error('[ServiceWorker] Cache install failed:', err))
+self.addEventListener('install', (event) => {
+  console.log('[SW] install');
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(STATIC_CACHE);
+      try {
+        await cache.addAll(PRECACHE_URLS);
+        console.log('[SW] precached', PRECACHE_URLS.length, 'items');
+      } catch (err) {
+        console.error('[SW] precache failed', err);
+      }
+    })()
   );
-  // Activate immediately
   self.skipWaiting();
 });
 
 // ---------------- ACTIVATE ----------------
-self.addEventListener('activate', (evt) => {
-  console.log('[ServiceWorker] Activate');
-  evt.waitUntil(
+self.addEventListener('activate', (event) => {
+  console.log('[SW] activate');
+  event.waitUntil(
     (async () => {
-      // Clear old caches
+      // remove old caches
       const keys = await caches.keys();
-      await Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME && key !== API_CACHE_NAME) {
-            console.log('[ServiceWorker] Removing old cache', key);
-            return caches.delete(key);
-          }
-        })
-      );
+      await Promise.all(keys.map(key => {
+        if (![STATIC_CACHE, API_CACHE, IMAGE_CACHE].includes(key)) {
+          console.log('[SW] deleting cache', key);
+          return caches.delete(key);
+        }
+      }));
 
-      // Take control of clients immediately
+      // Immediately take control of uncontrolled clients
       await self.clients.claim();
 
-      // 🔄 FORCE REFRESH: reload all controlled clients to pick up new SW & assets
-      const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      for (const client of clientList) {
-        try {
-          // Try postMessage first (your app can optionally handle it)
-          client.postMessage({ type: 'SW_ACTIVATED', staticCache: CACHE_NAME, apiCache: API_CACHE_NAME });
-          // Then force a reload to ensure fresh assets
-          if ('navigate' in client) {
-            client.navigate(client.url);
-          }
-        } catch (e) {
-          console.warn('[ServiceWorker] Client refresh failed:', e);
-        }
-      }
+      // Notify clients (they can show an update UI)
+      await broadcastMessage({ type: 'SW_ACTIVATED', staticCache: STATIC_CACHE, apiCache: API_CACHE });
     })()
   );
 });
 
-// ---------------- NOTIFICATION CLICK ----------------
-self.addEventListener('notificationclick', (event) => {
-  console.log('[ServiceWorker] Notification click received:', event);
+// ---------------- FETCH ----------------
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
 
-  event.notification.close();
-
-  const data = event.notification.data || {};
-  const action = event.action;
-
-  if (action === 'close') return;
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
-        // Focus existing app window if any
-        for (const client of clientList) {
-          const url = new URL(client.url);
-          if (url.origin === self.location.origin) {
-            return client.focus().then(() => {
-              client.postMessage({
-                type: 'NOTIFICATION_CLICK',
-                action: action || 'view',
-                data
-              });
-            });
-          }
-        }
-        // Otherwise open a new window
-        if (clients.openWindow) {
-          let url = '/frontend/';
-          if (data.bookingId) {
-            url += `?notification=booking&id=${data.bookingId}`;
-          } else if (data.type) {
-            url += `?notification=${data.type}`;
-          }
-          return clients.openWindow(url);
-        }
-      })
-      .catch(err => console.error('[ServiceWorker] Notification click error:', err))
-  );
-});
-
-// ---------------- NOTIFICATION CLOSE ----------------
-self.addEventListener('notificationclose', (event) => {
-  console.log('[ServiceWorker] Notification closed:', event.notification.tag);
-  // Optional: analytics hook
-});
-
-// ---------------- FETCH (ROUTER) ----------------
-self.addEventListener('fetch', (evt) => {
-  const request = evt.request;
-  const url = new URL(request.url);
-
-  // Only handle GET requests
-  if (request.method !== 'GET') return;
-
-  // ---- ROUTE PRIORITY (IMPORTANT): API checks first ----
-
-  // 1) PocketBase API (localhost:8091)
-  if (isPocketBaseAPI(url)) {
-    // 1a) NEVER CACHE artisan details
-    if (isArtisanDetails(url)) {
-      evt.respondWith(fetchNetworkOnly(request));
+  // We'll only handle GET requests for resource caching; other methods may be queued
+  if (request.method === 'GET') {
+    // Never cache artisan details - always network only to ensure live data
+    if (isArtisanDetailsUrl(request.url)) {
+      event.respondWith(networkOnly(request));
       return;
     }
-    // 1b) Other API requests: network-first with cache fallback
-    evt.respondWith(networkFirstAPI(request));
+
+    // Images: cache-first, separate image cache
+    if (isImageRequest(request)) {
+      event.respondWith(cacheFirstImage(request));
+      return;
+    }
+
+    // External origins (fonts, cdn, etc): cache-first with timeout
+    if (isExternalOrigin(request.url)) {
+      event.respondWith(cacheFirstExternalWithTimeout(request));
+      return;
+    }
+
+    // Static app shell (precache): cache-first (navigation fallback)
+    if (isPrecachable(request)) {
+      event.respondWith(cacheFirstAppShell(request));
+      return;
+    }
+
+    // API requests: network-first with cache fallback
+    if (isApiRequest(request)) {
+      event.respondWith(networkFirstApi(request));
+      return;
+    }
+
+    // Default: network first with cache fallback
+    event.respondWith(networkThenCacheDefault(request));
     return;
   }
 
-  // 2) External CDN/resources (fonts, fontawesome, unpkg)
-  if (isExternal(url)) {
-    evt.respondWith(cacheFirstExternal(request));
+  // For non-GET requests: attempt network; if fails and method is queueable (JSON body),
+  // store to outbox and respond with 503 indicating queued.
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
+    event.respondWith(handleNonGetRequest(request));
     return;
   }
-
-  // 3) Same-origin static assets (your app files)
-  if (isStaticAsset(url) || url.origin === LOCAL_APP_ORIGIN) {
-    evt.respondWith(cacheFirstApp(request));
-    return;
-  }
-
-  // 4) Default fallback (network-first)
-  evt.respondWith(networkFirstAPI(request));
 });
 
-// ---------------- FETCH STRATEGIES ----------------
+// ---------- Strategy implementations ----------
 
-// Never cache (used for artisan details)
-async function fetchNetworkOnly(request) {
+async function networkOnly(request) {
   try {
-    const res = await fetch(request);
-    return res;
+    return await fetch(request);
   } catch (err) {
-    console.error('[ServiceWorker] Network-only failed:', err);
-    return new Response(JSON.stringify({
-      error: 'NetworkError',
-      message: 'Live data required but you are offline.'
-    }), { status: 503, headers: { 'Content-Type': 'application/json' } });
-  }
-}
-
-// App static files: cache-first + update cache in background
-async function cacheFirstApp(request) {
-  const cached = await caches.match(request);
-  //if (cached) return cached;
-  
-  if (request.mode === 'navigate') {
-  return fetch(request).catch(() => caches.match('/frontend/index.html'));
-}
-
-  try {
-    const res = await fetch(request);
-    if (res && res.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, res.clone());
-    }
-    return res;
-  } catch (err) {
-    // Navigation fallback to index.html
-    if (request.mode === 'navigate') {
-      const fallback = await caches.match('/frontend/index.html');
-      if (fallback) return fallback;
-    }
-    return new Response('Offline content unavailable', { status: 503 });
-  }
-}
-
-// External (CDN) assets: cache-first with 5s network timeout
-async function cacheFirstExternal(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
-
-  try {
-    const res = await fetch(request, { signal: controller.signal });
-    clearTimeout(timer);
-    if (res && res.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, res.clone());
-    }
-    return res;
-  } catch (err) {
-    clearTimeout(timer);
-    const fallback = await caches.match(request);
-    return fallback || new Response('Resource unavailable offline', { status: 503 });
-  }
-}
-
-// API (non-artisan-detail): network-first with cache fallback
-async function networkFirstAPI(request) {
-  const apiCache = await caches.open(API_CACHE_NAME);
-  try {
-    const res = await fetch(request);
-    if (request.method === 'GET' && res && res.ok) {
-      apiCache.put(request, res.clone());
-    }
-    return res;
-  } catch (err) {
-    const cached = await apiCache.match(request);
-    if (cached) return cached;
-    return new Response(JSON.stringify({
-      error: 'Offline',
-      message: 'This feature requires internet connection'
-    }), { status: 503, headers: { 'Content-Type': 'application/json' } });
-  }
-}
-
-// ---------------- BACKGROUND SYNC (optional hook) ----------------
-self.addEventListener('sync', (event) => {
-  console.log('[ServiceWorker] Background sync:', event.tag);
-  if (event.tag === 'background-sync') {
-    event.waitUntil(doBackgroundSync());
-  }
-});
-
-async function doBackgroundSync() {
-  // Implement offline queue flush here if needed
-  console.log('[ServiceWorker] Performing background sync');
-}
-
-// ---------------- PUSH ----------------
-self.addEventListener('push', (event) => {
-  console.log('[ServiceWorker] Push notification received');
-
-  if (!event.data) return;
-
-  try {
-    const data = event.data.json();
-    const options = {
-      body: data.message || 'You have a new notification',
-      icon: '/frontend/assets/icon-192.png',
-      badge: '/frontend/assets/icon-192.png',
-      tag: data.tag || 'naco-push',
-      data: data.data || {},
-      requireInteraction: false,
-      actions: [
-        { action: 'view',  title: 'View',  icon: '/frontend/assets/icon-192.png' },
-        { action: 'close', title: 'Close' }
-      ]
-    };
-
-    event.waitUntil(
-      self.registration.showNotification(data.title || 'Naco Update', options)
-    );
-  } catch (error) {
-    console.error('[ServiceWorker] Error handling push notification:', error);
-  }
-});
-
-// ---------------- MESSAGE CHANNEL ----------------
-self.addEventListener('message', (event) => {
-  console.log('[ServiceWorker] Message received:', event.data);
-  const { type } = event.data || {};
-
-  switch (type) {
-    case 'SKIP_WAITING':
-      self.skipWaiting();
-      break;
-
-    case 'GET_VERSION':
-      // respond via MessageChannel (expects event.ports[0])
-      if (event.ports && event.ports[0]) {
-        event.ports[0].postMessage({ staticCache: CACHE_NAME, apiCache: API_CACHE_NAME });
-      }
-      break;
-
-    case 'CLEAR_CACHE':
-      clearAllCaches().then(() => {
-        if (event.ports && event.ports[0]) {
-          event.ports[0].postMessage({ success: true });
-        }
-      });
-      break;
-
-    default:
-      console.log('[ServiceWorker] Unknown message type:', type);
-  }
-});
-
-// ---- CLEAR ALL CACHES UTILITY ----
-async function clearAllCaches() {
-  const names = await caches.keys();
-  return Promise.all(names.map((n) => caches.delete(n)));
-}
-
-// ---------------- GLOBAL ERROR LOGGING ----------------
-self.addEventListener('error', (event) => {
-  console.error('[ServiceWorker] Error:', event.error);
-});
-
-self.addEventListener('unhandledrejection', (event) => {
-  console.error('[ServiceWorker] Unhandled promise rejection:', event.reason);
-});
-
-/**
-const CACHE_NAME = 'naco-static-v4';
-const API_CACHE_NAME = 'naco-api-v2';
-const FILES_TO_CACHE = [
-  '/',
-  '/frontend/',
-  '/frontend/index.html',
-  '/frontend/css/style.css',
-  '/frontend/js/app.js',
-  '/frontend/api/mock-api.js',
-  '/frontend/manifest.json',
-  '/frontend/assets/icon-192.png',
-  '/frontend/assets/icon-512.png',
-  '/frontend/assets/avatar-placeholder.png',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css',
-  'https://unpkg.com/pocketbase@0.20.0/dist/pocketbase.umd.js'
-];
-
-// Install event - cache essential files
-self.addEventListener('install', (evt) => {
-  console.log('[ServiceWorker] Install');
-  evt.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('[ServiceWorker] Pre-caching offline page');
-        return cache.addAll(FILES_TO_CACHE);
-      })
-      .catch(err => console.error('[ServiceWorker] Cache install failed:', err))
-  );
-  self.skipWaiting();
-});
-
-// Activate event - clean up old caches
-self.addEventListener('activate', (evt) => {
-  console.log('[ServiceWorker] Activate');
-  evt.waitUntil(
-    caches.keys().then(keyList => {
-      return Promise.all(keyList.map(key => {
-        if (key !== CACHE_NAME && key !== API_CACHE_NAME) {
-          console.log('[ServiceWorker] Removing old cache', key);
-          return caches.delete(key);
-        }
-      }));
-    })
-  );
-  self.clients.claim();
-});
-
-// Enhanced notification click handler
-self.addEventListener('notificationclick', function(event) {
-  console.log('[ServiceWorker] Notification click received:', event);
-  
-  event.notification.close();
-  
-  const data = event.notification.data || {};
-  const action = event.action;
-  
-  // Handle different actions
-  if (action === 'close') {
-    return; // Just close the notification
-  }
-  
-  event.waitUntil(
-    clients.matchAll({
-      type: 'window',
-      includeUncontrolled: true
-    }).then(function(clientList) {
-      console.log('[ServiceWorker] Found clients:', clientList.length);
-      
-      // Look for existing app window
-      for (let client of clientList) {
-        const url = new URL(client.url);
-        if (url.origin === self.location.origin) {
-          console.log('[ServiceWorker] Focusing existing window');
-          return client.focus().then(() => {
-            // Send message to the focused client
-            client.postMessage({
-              type: 'NOTIFICATION_CLICK',
-              action: action || 'view',
-              data: data
-            });
-          });
-        }
-      }
-      
-      // No existing window found, open new one
-      console.log('[ServiceWorker] Opening new window');
-      if (clients.openWindow) {
-        let url = '/frontend/';
-        
-        // Add notification context to URL
-        if (data.bookingId) {
-          url += `?notification=booking&id=${data.bookingId}`;
-        } else if (data.type) {
-          url += `?notification=${data.type}`;
-        }
-        
-        return clients.openWindow(url);
-      }
-    }).catch(err => {
-      console.error('[ServiceWorker] Error handling notification click:', err);
-    })
-  );
-});
-
-// Handle notification close
-self.addEventListener('notificationclose', function(event) {
-  console.log('[ServiceWorker] Notification closed:', event.notification.tag);
-  
-  // Optional: Track notification close analytics
-  // You could send analytics data here
-});
-
-// Enhanced fetch handler with better caching strategy
-self.addEventListener('fetch', (evt) => {
-  const { request } = evt;
-  const url = new URL(request.url);
-  
-  // Skip non-GET requests
-  if (request.method !== 'GET') return;
-  
-  // Handle different types of requests
-  if (url.origin === location.origin) {
-    // Same-origin requests (your app files)
-    evt.respondWith(handleSameOriginRequest(request));
-  } else if (url.origin === 'http://localhost:8091' || url.hostname === 'your-pocketbase-domain.com') {
-    // PocketBase API requests
-    evt.respondWith(handleAPIRequest(request));
-  } else {
-    // External resources (CDN, fonts, etc.)
-    evt.respondWith(handleExternalRequest(request));
-  }
-});
-
-// Handle same-origin requests (app files)
-async function handleSameOriginRequest(request) {
-  try {
-    // Try cache first for static assets
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    
-    // Fetch from network
-    const networkResponse = await fetch(request);
-    
-    // Cache successful responses
-    if (networkResponse.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
-    }
-    
-    return networkResponse;
-  } catch (error) {
-    console.log('[ServiceWorker] Network failed, serving fallback');
-    
-    // Serve cached fallback for navigation requests
-    if (request.mode === 'navigate') {
-      const fallback = await caches.match('/frontend/index.html');
-      if (fallback) return fallback;
-    }
-    
-    // Return cached version if available
-    return await caches.match(request) || new Response('Offline content unavailable');
-  }
-}
-
-// Handle API requests with network-first strategy
-async function handleAPIRequest(request) {
-  const apiCache = await caches.open(API_CACHE_NAME);
-  
-  try {
-    // Always try network first for API requests
-    const networkResponse = await fetch(request);
-    
-    // Cache GET requests only
-    if (request.method === 'GET' && networkResponse.ok) {
-      apiCache.put(request, networkResponse.clone());
-    }
-    
-    return networkResponse;
-  } catch (error) {
-    console.log('[ServiceWorker] API request failed, trying cache');
-    
-    // Fallback to cache for GET requests
-    if (request.method === 'GET') {
-      const cachedResponse = await apiCache.match(request);
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-    }
-    
-    // Return appropriate offline response
-    return new Response(JSON.stringify({
-      error: 'Offline',
-      message: 'This feature requires an internet connection'
-    }), {
+    return new Response(JSON.stringify({ error: 'network', message: 'Network required' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' }
     });
   }
 }
 
-// Handle external requests (CDN, fonts, etc.)
-async function handleExternalRequest(request) {
+async function cacheFirstImage(request) {
+  const cache = await caches.open(IMAGE_CACHE);
+  const cached = await cache.match(request);
+  if (cached) return cached;
   try {
-    // Try cache first for external resources
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
+    const res = await fetch(request);
+    if (res && res.ok) {
+      cache.put(request, res.clone()).catch(() => {});
     }
-    
-    // Fetch from network with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-    
-    const networkResponse = await fetch(request, {
-      signal: controller.signal
+    return res;
+  } catch (err) {
+    // return placeholder (if cached) or fallback 503
+    const placeholder = await caches.match(`${BASE_PATH}/assets/avatar-placeholder.png`);
+    if (placeholder) return placeholder;
+    return new Response('Image unavailable', { status: 503 });
+  }
+}
+
+async function cacheFirstExternalWithTimeout(request) {
+  const cache = await caches.open(STATIC_CACHE);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), EXTERNAL_TIMEOUT);
+
+  try {
+    const res = await fetch(request, { signal: controller.signal });
+    clearTimeout(timer);
+    if (res && res.ok) {
+      cache.put(request, res.clone()).catch(() => {});
+    }
+    return res;
+  } catch (err) {
+    clearTimeout(timer);
+    const fallback = await cache.match(request);
+    if (fallback) return fallback;
+    return new Response('External resource unavailable', { status: 503 });
+  }
+}
+
+function isPrecachable(request) {
+  try {
+    const url = normalizeRequestForCache(request);
+    // If precache contains this path
+    return PRECACHE_URLS.some(asset => normalizeRequestForCache(new URL(asset, self.location.origin).href) === url) || isNavigationRequest(request);
+  } catch (e) {
+    return false;
+  }
+}
+
+async function cacheFirstAppShell(request) {
+  const cache = await caches.open(STATIC_CACHE);
+  // Navigation: try network first for HTML then fallback to cached index.html
+  if (isNavigationRequest(request)) {
+    try {
+      const res = await fetch(request);
+      if (res && res.ok) {
+        cache.put(request, res.clone()).catch(() => {});
+      }
+      return res;
+    } catch (err) {
+      const fallback = await cache.match(`${BASE_PATH}/index.html`) || await cache.match('/index.html') || await cache.match('/');
+      if (fallback) return fallback;
+      return new Response('Offline', { status: 503 });
+    }
+  }
+
+  // Other precached assets: return cached if available, otherwise network then cache
+  const cached = await cache.match(request);
+  if (cached) return cached;
+
+  try {
+    const res = await fetch(request);
+    if (res && res.ok) {
+      cache.put(request, res.clone()).catch(() => {});
+    }
+    return res;
+  } catch (err) {
+    const fallback = await cache.match(request);
+    if (fallback) return fallback;
+    return new Response('Resource unavailable', { status: 503 });
+  }
+}
+
+async function networkFirstApi(request) {
+  const cache = await caches.open(API_CACHE);
+  try {
+    const res = await fetch(request);
+    if (request.method === 'GET' && res && res.ok) {
+      cache.put(request, res.clone()).catch(() => {});
+    }
+    return res;
+  } catch (err) {
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    return new Response(JSON.stringify({ error: 'offline', message: 'API unavailable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' }
     });
-    
-    clearTimeout(timeoutId);
-    
-    // Cache successful responses
-    if (networkResponse.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
-    }
-    
-    return networkResponse;
-  } catch (error) {
-    console.log('[ServiceWorker] External request failed:', error);
-    
-    // Try to return cached version
-    const cachedResponse = await caches.match(request);
-    return cachedResponse || new Response('Resource unavailable offline');
   }
 }
 
-// Background sync for offline actions (optional feature)
-self.addEventListener('sync', function(event) {
-  console.log('[ServiceWorker] Background sync:', event.tag);
-  
-  if (event.tag === 'background-sync') {
-    event.waitUntil(doBackgroundSync());
-  }
-});
-
-async function doBackgroundSync() {
-  // Implement background sync logic here
-  // For example: sync offline bookings, notifications, etc.
-  console.log('[ServiceWorker] Performing background sync');
-}
-
-// Push notification handler (for future server-sent push notifications)
-self.addEventListener('push', function(event) {
-  console.log('[ServiceWorker] Push notification received');
-  
-  if (!event.data) return;
-  
+async function networkThenCacheDefault(request) {
   try {
-    const data = event.data.json();
-    
-    const options = {
-      body: data.message || 'You have a new notification',
-      icon: '/frontend/assets/icon-192.png',
-      badge: '/frontend/assets/icon-192.png',
-      tag: data.tag || 'naco-push',
-      data: data.data || {},
-      requireInteraction: false,
-      actions: [
-        {
-          action: 'view',
-          title: 'View',
-          icon: '/frontend/assets/icon-192.png'
-        },
-        {
-          action: 'close',
-          title: 'Close'
+    const res = await fetch(request);
+    return res;
+  } catch (err) {
+    const cache = await caches.open(STATIC_CACHE);
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    return new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+  }
+}
+
+// ---------------- Handle non-GET queueable requests ----------------
+
+async function handleNonGetRequest(request) {
+  // Try network first
+  try {
+    const response = await fetch(request.clone());
+    return response;
+  } catch (err) {
+    // If network fails, attempt to queue the request (if it is JSON serializable)
+    try {
+      const serialized = await serializeRequest(request);
+      if (!serialized.isJSON && serialized.method !== 'DELETE') {
+        // We only queue JSON bodies. DELETE typically has no body; still queue it.
+        // Respond with 422 Unprocessable Entity to inform client it's not queueable.
+        return new Response(JSON.stringify({
+          error: 'not-queueable',
+          message: 'Request could not be queued offline. Only JSON payloads are supported.'
+        }), { status: 422, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      // Save to outbox
+      await idb.add(OUTBOX_STORE, serialized);
+
+      // Register sync event (if supported)
+      if ('sync' in self.registration) {
+        try {
+          await self.registration.sync.register('outbox-sync');
+        } catch (e) {
+          console.warn('[SW] sync.register failed', e);
         }
-      ]
-    };
-    
-    event.waitUntil(
-      self.registration.showNotification(data.title || 'Naco Update', options)
-    );
-  } catch (error) {
-    console.error('[ServiceWorker] Error handling push notification:', error);
+      }
+
+      // Inform clients a request was queued
+      await broadcastMessage({ type: 'OUTBOX_QUEUED', item: { url: serialized.url, method: serialized.method } });
+
+      // Return 202 Accepted to client to indicate request queued
+      return new Response(JSON.stringify({ ok: true, queued: true }), {
+        status: 202,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (queueErr) {
+      console.error('[SW] Failed to queue request', queueErr);
+      return new Response(JSON.stringify({ error: 'queue_error', message: 'Failed to queue request' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+}
+
+// ---------------- Background Sync: process outbox ----------------
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'outbox-sync') {
+    event.waitUntil(processOutboxQueue());
+  } else if (event.tag === 'analytics-sync') {
+    event.waitUntil(flushAnalyticsQueue());
   }
 });
 
-// Message handler for communication with main app
-self.addEventListener('message', function(event) {
-  console.log('[ServiceWorker] Message received:', event.data);
-  
-  const { type, data } = event.data;
-  
-  switch (type) {
+async function processOutboxQueue() {
+  const items = await idb.getAll(OUTBOX_STORE);
+  if (!items || !items.length) return;
+
+  // attempt to send each item in order
+  for (const item of items) {
+    try {
+      const req = buildRequestFromSerialized(item);
+      const resp = await fetch(req);
+      if (resp && (resp.ok || resp.status === 201 || resp.status === 202)) {
+        // success: remove from outbox
+        await idb.deleteByKey(OUTBOX_STORE, item.id);
+        await broadcastMessage({ type: 'OUTBOX_SENT', id: item.id, url: item.url });
+      } else {
+        console.warn('[SW] Outbox item failed (server):', item.url, 'status', resp.status);
+        // If server returns a 4xx, we might want to drop item to avoid retry storms.
+        if (resp && resp.status >= 400 && resp.status < 500) {
+          await idb.deleteByKey(OUTBOX_STORE, item.id);
+          await broadcastMessage({ type: 'OUTBOX_DROPPED', id: item.id, url: item.url, status: resp.status });
+        }
+        // otherwise leave it to be retried later
+      }
+    } catch (err) {
+      console.warn('[SW] Outbox item failed (network):', item.url, err);
+      // network error: will retry next sync
+      // break here to avoid busy looping
+      return;
+    }
+  }
+}
+
+// ---------------- Offline Analytics ----------------
+// Accept analytics events via postMessage from client and store in IDB; flush on sync or when online
+self.addEventListener('message', (event) => {
+  const data = event.data || {};
+  if (!data || !data.type) return;
+
+  switch (data.type) {
+    case 'ANALYTICS_EVENT':
+      handleAnalyticsEvent(data.event);
+      break;
     case 'SKIP_WAITING':
       self.skipWaiting();
       break;
-    case 'GET_VERSION':
-      event.ports[0].postMessage({ version: CACHE_NAME });
-      break;
     case 'CLEAR_CACHE':
-      clearAllCaches().then(() => {
-        event.ports[0].postMessage({ success: true });
-      });
+      clearCachesAndNotify();
+      break;
+    case 'GET_VERSION':
+      if (event.ports && event.ports[0]) {
+        event.ports[0].postMessage({ staticCache: STATIC_CACHE, apiCache: API_CACHE, imageCache: IMAGE_CACHE });
+      }
+      break;
+    case 'FORCE_RELOAD':
+      // ask clients to reload
+      broadcastMessage({ type: 'SW_RELOAD' });
       break;
     default:
-      console.log('[ServiceWorker] Unknown message type:', type);
+      // ignore unknown messages
+      break;
   }
 });
 
-// Utility function to clear all caches
-async function clearAllCaches() {
-  const cacheNames = await caches.keys();
-  return Promise.all(
-    cacheNames.map(cacheName => caches.delete(cacheName))
-  );
+async function handleAnalyticsEvent(eventObj) {
+  try {
+    await idb.add(ANALYTICS_STORE, { event: eventObj, ts: Date.now() });
+    // register analytics sync
+    if ('sync' in self.registration) {
+      await self.registration.sync.register('analytics-sync');
+    } else {
+      // attempt immediate flush if online
+      if (self.navigator && self.navigator.onLine) {
+        await flushAnalyticsQueue();
+      }
+    }
+  } catch (err) {
+    console.warn('[SW] analytics queue add failed', err);
+  }
 }
 
-// Error handling
-self.addEventListener('error', function(event) {
-  console.error('[ServiceWorker] Error:', event.error);
+async function flushAnalyticsQueue() {
+  const events = await idb.getAll(ANALYTICS_STORE);
+  if (!events || !events.length) return;
+
+  // Attempt to POST to a configured analytics endpoint
+  const analyticsEndpoint = '/analytics/offline'; // adjust to your server endpoint
+  for (const item of events) {
+    try {
+      const resp = await fetch(analyticsEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item.event)
+      });
+      if (resp && resp.ok) {
+        await idb.deleteByKey(ANALYTICS_STORE, item.id);
+      } else {
+        console.warn('[SW] analytics POST failed', resp && resp.status);
+        // Stop and retry later
+        return;
+      }
+    } catch (err) {
+      console.warn('[SW] analytics flush network failed', err);
+      return;
+    }
+  }
+  // notify clients that analytics flushed
+  broadcastMessage({ type: 'ANALYTICS_FLUSHED' });
+}
+
+// ---------------- Notification & Push ----------------
+self.addEventListener('push', (event) => {
+  if (!event.data) {
+    console.warn('[SW] push event with no data');
+    return;
+  }
+  let data = {};
+  try {
+    data = event.data.json();
+  } catch (e) {
+    data = { title: 'Naco', message: event.data.text() || 'You have a notification' };
+  }
+
+  const title = data.title || 'Naco Notification';
+  const options = {
+    body: data.message || data.body || 'You have a new notification',
+    icon: data.icon || `${BASE_PATH}/assets/icon-192.png`,
+    badge: data.badge || `${BASE_PATH}/assets/icon-192.png`,
+    tag: data.tag || 'naco-notification',
+    data: data.data || {},
+    requireInteraction: data.requireInteraction || false,
+    actions: data.actions || [
+      { action: 'view', title: 'Open app' },
+      { action: 'dismiss', title: 'Dismiss' }
+    ]
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
-self.addEventListener('unhandledrejection', function(event) {
-  console.error('[ServiceWorker] Unhandled promise rejection:', event.reason);
-});**/
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const action = event.action;
+  const payload = event.notification.data || {};
+
+  event.waitUntil((async () => {
+    const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    // If a client is open, focus and send message
+    for (const client of allClients) {
+      try {
+        await client.focus();
+        client.postMessage({ type: 'NOTIFICATION_CLICK', action, data: payload });
+        return;
+      } catch (e) {
+        // continue
+      }
+    }
+
+    // If no window open, open one
+    if (clients.openWindow) {
+      let url = `${BASE_PATH}/`;
+      if (payload && payload.bookingId) {
+        url += `?notification=booking&id=${payload.bookingId}`;
+      } else if (payload && payload.url) {
+        url = payload.url;
+      }
+      await clients.openWindow(url);
+    }
+  })());
+});
+
+// ---------------- Cache clearing utility ----------------
+async function clearCachesAndNotify() {
+  const keys = await caches.keys();
+  await Promise.all(keys.map(key => caches.delete(key)));
+  await idb.clear(OUTBOX_STORE);
+  await idb.clear(ANALYTICS_STORE);
+  broadcastMessage({ type: 'CACHES_CLEARED' });
+}
+
+// ---------------- Helper: online event to attempt flushing ----------------
+self.addEventListener('periodicsync', (event) => {
+  // not all browsers support this. If supported, we can use it to flush
+  if (event.tag === 'naco-periodic-sync') {
+    event.waitUntil(async () => {
+      await processOutboxQueue();
+      await flushAnalyticsQueue();
+    });
+  }
+});
+
+// Also attempt to flush when SW detects the client regained connectivity via message
+// Clients may postMessage({type: 'CLIENT_ONLINE'}) to trigger this.
+self.addEventListener('message', (event) => {
+  const data = event.data || {};
+  if (data && data.type === 'CLIENT_ONLINE') {
+    event.waitUntil((async () => {
+      await processOutboxQueue();
+      await flushAnalyticsQueue();
+    })());
+  }
+});
+
+// ---------------- Error logging ----------------
+self.addEventListener('error', (evt) => {
+  console.error('[SW] error', evt.error);
+});
+self.addEventListener('unhandledrejection', (evt) => {
+  console.error('[SW] unhandledrejection', evt.reason);
+});
+
+/***************************************************************
+ * End of Service Worker
+ ***************************************************************/

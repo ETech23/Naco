@@ -2,13 +2,8 @@
 // Complete JavaScript implementation with React-like patterns
 
 
-/**
-import * as API from '../../api/mock-api.js';
-import { pb } from '../../api/mock-api.js';
-**/
-
-import * as API from './mock-api.js';
-import { pb } from './mock-api.js';
+import * as API from './api.js';
+import { api } from './api.js';
 
 class NacoApp {
   constructor() {
@@ -440,40 +435,7 @@ this.$('#view-all-featured')?.addEventListener('click', () => this.showAllFeatur
     mainElement.classList.toggle('hidden', !!this.state.user);
   }
     
- /**   async showAllFeaturedArtisans() {
-  try {
-    const featured = this.state.artisans.filter(a => a.premium);
-    
-    const html = `
-      <div class="featured-modal">
-        <h2>Featured Artisans</h2>
-        <div class="featured-grid">
-          ${featured.map(artisan => `
-            <div class="featured-card" data-id="${artisan.id}">
-              <img src="${artisan.photo || 'default-profile.jpg'}" alt="${artisan.name}">
-              <h3>${artisan.name}</h3>
-              <p>${artisan.skill}</p>
-              <button class="btn-view-profile" data-id="${artisan.id}">View Profile</button>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
 
-    this.showModal(html, () => {
-      this.$$('.btn-view-profile').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          const id = e.target.dataset.id;
-          this.hideModal();
-          setTimeout(() => this.openArtisanProfile(id), 300);
-        });
-      });
-    });
-  } catch (error) {
-    console.error('Failed to load featured artisans:', error);
-    this.showToast('Failed to load featured artisans', 'error');
-  }
-}**/
 
 renderNotificationItem(notification) {
   return `
@@ -531,46 +493,7 @@ closeProfilePage() {
 }
     
     
-  // Search Functions
-/**  async handleMainSearch(query) {
-  // Don't clear if query is empty - let user type
-  if (!query || query.trim().length === 0) {
-    this.$('#clear-search')?.classList.add('hidden');
-    this.$('#search-results-container')?.classList.add('hidden');
-    return;
-  }
-
-  // Only search if query is at least 2 characters
-  if (query.trim().length < 2) {
-    return;
-  }
-
-  const resultsContainer = this.$('#search-results-container');
-  const resultsList = this.$('#search-results-list');
-  const clearBtn = this.$('#clear-search');
-  
-  if (!resultsContainer || !resultsList) return;
-
-  try {
-    clearBtn?.classList.remove('hidden');
-    resultsContainer.classList.remove('hidden');
-    
-    const city = this.$('#search-city-select')?.value || '';
-    const results = await this.withRetry(() => API.searchArtisans(query, city));
-    
-    if (results.length > 0) {
-      resultsList.innerHTML = results.map(artisan => 
-        this.renderSearchResultCard(artisan, query)
-      ).join('');
-
-    } else {
-      resultsList.innerHTML = `<p class="muted">No results found for "${this.escapeHtml(query)}"</p>`;
-    }
-  } catch (error) {
-    console.error('Search failed:', error);
-    resultsList.innerHTML = '<p class="muted">Search error. Please try again.</p>';
-  }
-}**/
+ 
 
 // Update your clearMainSearch function to not interfere with typing
 clearMainSearch() {
@@ -887,43 +810,7 @@ renderSearchResultCard(artisan) {
 }
 
 
-/**renderSearchResultCard(artisan, searchQuery) {
-  const highlightText = (text, query) => {
-    if (!query || !text) return text;
-    const words = query.split(' ').filter(w => w.length >= 2);
-    let highlighted = text;
-    
-    words.forEach(word => {
-      const regex = new RegExp(`(${word})`, 'gi');
-      highlighted = highlighted.replace(regex, '<mark>$1</mark>');
-    });
-    
-    return highlighted;
-  };
 
-  const profile = artisan.expand?.artisan_profiles_via_user?.[0] || {};
-  
-  return `
-    <div class="search-result-card" data-id="${artisan.id}">
-      <img style="max-width: 120px; max-height: 120px;" src="${artisan.photo || '../assets/avatar-placeholder.png'}" 
-           alt="${this.escapeHtml(artisan.name)}"
-           onerror="this.src='../assets/avatar-placeholder.png'">
-      <div class="search-result-info">
-        <h4>${highlightText(this.escapeHtml(artisan.name), searchQuery)} ${this.renderVerificationBadge(artisan)}</h4>
-        <p class="search-result-skill">${highlightText(this.escapeHtml(profile.skill || artisan.skill || ''), searchQuery)}</p>
-        <p class="search-result-location">${this.escapeHtml(artisan.location)}</p>
-        <div class="search-result-rating">
-          <i class="fas fa-star"></i> ${(artisan.rating || 0).toFixed(1)}
-          ${artisan.premium ? '<span class="premium-badge">PREMIUM</span>' : ''}
-          ${artisan.matchedFields ? `<small class="matched-in">Found in: ${artisan.matchedFields.join(', ')}</small>` : ''}
-        </div>
-      </div>
-      <div class="search-result-price">
-        ${this.formatCurrency(profile.rate || artisan.rate || 0)}
-      </div>
-    </div>
-  `;
-}**/
  
 
   clearMainSearch() {
@@ -4703,113 +4590,7 @@ async loadProfilePage() {
   container.querySelector('#profile-theme')?.addEventListener('click', () => this.toggleTheme?.());
   container.querySelector('#profile-logout')?.addEventListener('click', () => this.logout?.());
 }
-/**async loadProfilePage() {
-  const container = this.$('.profile-container');
-  if (!container) {
-    console.error('Profile container not found');
-    return;
-  }
-  
-  if (!this.state.user) {
-    container.innerHTML = `
-      <div class="profile-header">
-        <h3>Welcome to Naco</h3>
-        <p>Please log in to view your profile</p>
-        <button id="login-from-profile" class="btn-primary">Login</button>
-      </div>
-    `;
-    return;
-  }
-  
-  // Get user stats
-  let stats = { totalBookings: 0, favoritesCount: 0, completedJobs: 0 };
-  try {
-    const bookings = await API.getUserBookings();
-    stats.totalBookings = bookings.length;
-    stats.completedJobs = bookings.filter(b => b.status === 'completed').length;
-    
-    const favorites = await API.getUserFavorites();
-    stats.favoritesCount = favorites.length;
-  } catch (error) {
-    console.error('Failed to load profile stats:', error);
-  }
-  
-  container.innerHTML = `
-    <div class="profile-header">
-      <img src="${this.state.user.avatar ? pb.files.getUrl(this.state.user, this.state.user.avatar, { thumb: '200x200' }) : '../assets/avatar-placeholder.png'}" 
-           alt="Profile" class="profile-avatar-large">
-      <h3 class="profile-name">
-        ${this.escapeHtml(this.state.user.name)} 
-        ${this.renderVerificationBadge(this.state.user)}
-      </h3>
-      <p class="profile-role">${this.state.user.role === 'artisan' ? 'Artisan' : 'Client'}</p>
-      
-      <div class="profile-stats">
-        <div class="profile-stat">
-          <div class="profile-stat-number">${stats.totalBookings}</div>
-          <div class="profile-stat-label">Total Bookings</div>
-        </div>
-        <div class="profile-stat">
-          <div class="profile-stat-number">${stats.completedJobs}</div>
-          <div class="profile-stat-label">Completed</div>
-        </div>
-        <div class="profile-stat">
-          <div class="profile-stat-number">${stats.favoritesCount}</div>
-          <div class="profile-stat-label">Favorites</div>
-        </div>
-      </div>
-    </div>
 
-    <div class="profile-menu">
-      <button class="profile-menu-item" id="profile-bookings">
-        <i class="fas fa-calendar profile-menu-icon"></i>
-        <span>My Bookings</span>
-        <i class="fas fa-chevron-right" style="margin-left: auto; "></i>
-      </button>
-      <button class="profile-menu-item" id="profile-favorites">
-        <i class="fas fa-heart profile-menu-icon"></i>
-        <span>Favorites</span>
-        <i class="fas fa-chevron-right" style="margin-left: auto;"></i>
-      </button>
-      ${this.state.user.role === 'artisan' ? `
-        <button class="profile-menu-item" id="profile-clients">
-          <i class="fas fa-users profile-menu-icon"></i>
-          <span>My Clients</span>
-          <i class="fas fa-chevron-right" style="margin-left: auto;"></i>
-        </button>
-      ` : ''}
-      <button class="profile-menu-item" id="profile-settings">
-        <i class="fas fa-cog profile-menu-icon"></i>
-        <span>Settings</span>
-        <i class="fas fa-chevron-right" style="margin-left: auto;"></i>
-      </button>
-      <button class="profile-menu-item role-switch-item">
-        <i class="fas fa-sync profile-menu-icon"></i>
-        <div style="flex: 1;">
-          <span>Switch to ${this.state.user.role === 'artisan' ? 'Client' : 'Artisan'}</span>
-          <label class="switch" style="margin-left: auto;">
-            <input type="checkbox" id="profile-role-switch" ${this.state.user.role === 'artisan' ? 'checked' : ''}>
-            <span class="slider"></span>
-          </label>
-        </div>
-      </button>
-      <button class="profile-menu-item" id="profile-upgrade">
-        <i class="fas fa-star profile-menu-icon"></i>
-        <span>Upgrade to Premium</span>
-        <i class="fas fa-chevron-right" style="margin-left: auto;"></i>
-      </button>
-      <button class="profile-menu-item" id="profile-theme">
-        <i class="fas fa-palette profile-menu-icon"></i>
-        <span>Toggle Theme</span>
-        <i class="fas fa-chevron-right" style="margin-left: auto;"></i>
-      </button>
-      <button class="profile-menu-item danger" id="profile-logout">
-        <i class="fas fa-sign-out-alt profile-menu-icon"></i>
-        <span>Logout</span>
-      </button>
-    </div>
-  `;
-}**/
 
     async openFavorites() {
     if (!this.state.user) {

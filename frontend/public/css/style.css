@@ -1,33 +1,65 @@
 /* Modern CSS Variables */
 :root {
+  /* Dark Mode as default */
   --golden: #c9b037;
   --green: #0f7a4a;
   --green-light: #10955a;
   --green-dark: #0d5a38;
   --accent: linear-gradient(135deg, #0f7a4a 0%, #c9b037 100%);
-  --bg: #f8faf9;
-  --card: #ffffff;
-  --muted: #64748b;
-  --text: #0f172a;
-  --border: #e2e8f0;
-  --border-light: #f1f5f9;
-  --radius: 16px;
-  --radius-sm: 8px;
-  --radius-lg: 24px;
-  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-  --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Dark Mode Variables */
-body.dark {
   --bg: #0f172a;
   --card: #1e293b;
   --text: #f8fafc;
   --muted: #94a3b8;
   --border: #334155;
   --border-light: #475569;
+  --radius: 16px;
+  --radius-sm: 8px;
+  --radius-lg: 24px;
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1),
+            0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1),
+               0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Completely hide scrollbars across all browsers while maintaining scroll functionality */
+html, body, div, section, main, .scroll-container {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* WebKit browsers */
+html::-webkit-scrollbar, 
+body::-webkit-scrollbar, 
+div::-webkit-scrollbar, 
+section::-webkit-scrollbar,
+main::-webkit-scrollbar,
+.scroll-container::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+
+/* Additional hack for browsers like DuckDuckGo */
+body {
+  overflow: -moz-scrollbars-none; /* Older Firefox */
+}
+
+/* For specific containers with scrolling */
+.scroll-container {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+}
+/* Light Mode Variables */
+body.light {
+  --bg: #f8faf9;
+  --card: #ffffff;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
 }
 
 /* Reset and Base */
@@ -55,6 +87,226 @@ body, html {
   margin: 0;
   padding: 0;
 }
+
+
+.booking-details-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  z-index: 9999;
+  overflow-y: auto;
+  animation: slideIn 0.3s ease;
+}
+
+.booking-details-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+
+.booking-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.booking-header h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+.booking-body {
+  padding: 16px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.booking-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.btn-primary {
+  background: linear-gradient(90deg, #556B2F, #c9b037);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--text);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.waiting-box, .completed-box {
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.waiting-box {
+  background: rgba(255, 200, 0, 0.1);
+  color: orange;
+}
+
+.completed-box {
+  background: rgba(0, 200, 100, 0.1);
+  color: var(--green, #2ecc71);
+}
+
+.confirmation-box h4 {
+  margin-bottom: 12px;
+}
+
+.btn-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* Modal Container - ADD THIS */
+.modal-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* Modal Overlays - REPLACE your existing modal CSS */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.modal-overlay.modal-active {
+  opacity: 1;
+}
+
+.modal-overlay.modal-closing {
+  opacity: 0;
+}
+
+/* Backdrop layers */
+.modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.overlay-light {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.overlay-medium {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.overlay-dark {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* Modal Content */
+.modal-content {
+  position: relative;
+  margin: 20px auto;
+  background: var(--background, white);
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  max-height: calc(100vh - 40px);
+  max-width: 600px;
+  overflow-y: auto;
+  transform: translateY(20px);
+  transition: transform 0.2s ease;
+}
+
+.modal-active .modal-content {
+  transform: translateY(0);
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-close {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  z-index: 10;
+}
+
+/* Notification positioning */
+.modal-overlay[data-modal-type="notification-detail"] .modal-content {
+  position: absolute;
+  top: 60px;
+  right: 20px;
+  width: 400px;
+  max-width: calc(100vw - 40px);
+  margin: 0;
+}
+
+/* Profile section positioning */
+.modal-overlay[data-modal-type="profile-section"] .modal-content {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 800px;
+  margin: 0;
+}
+
 
 
 /* smooth fade (uncomment and use instead of display:none if you'd like animation)*/
@@ -551,106 +803,9 @@ body, html {
   margin-top: 16px;
 }
 
-/* Notifications Page */
-.notifications-container {
-  max-width: 600px;
-  margin: 0 auto;
-}
+yu
 
-.notification-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 12px;
-  margin-bottom: 12px;
-  cursor: pointer;
-  transition: var(--transition);
-  border: 1px solid var(--border);
-}
-
-.notification-item:hover {
-  background: var(--border-light);
-  transform: translateX(4px);
-}
-
-.notification-item.unread {
-  background: rgba(15, 122, 74, 0.05);
-  border-color: var(--green);
-  font-weight: 500;
-}
-
-.notification-item.read {
-  opacity: 0.7;
-}
-
-.notification-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.notification-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--green);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  flex-shrink: 0;
-}
-
-.notification-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.notification-content h4 {
-  margin: 0 0 4px 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.notification-content p {
-  margin: 0 0 8px 0;
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--text);
-}
-
-.notification-time {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.notification-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.notification-btn {
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 12px;
-  transition: var(--transition);
-}
-
-.notification-btn:hover {
-  background: var(--green);
-  color: white;
-  border-color: var(--green);
-}
-
+/* Profile Page */
 /* Profile Page */
 .profile-container {
   max-width: 600px;
@@ -694,62 +849,112 @@ body, html {
   margin-top: 16px;
 }
 
-.profile-stat {
+.stat-item {
   text-align: center;
 }
 
-.profile-stat-number {
+.stat-number {
   font-size: 1.25rem;
   font-weight: 600;
   color: var(--green);
 }
 
-.profile-stat-label {
+.stat-label {
   font-size: 0.875rem;
   color: var(--muted);
 }
 
+/* Profile Menu */
 .profile-menu {
   background: var(--card);
   border-radius: 16px;
   border: 1px solid var(--border);
   overflow: hidden;
+  padding: 8px 0;
 }
 
-.profile-menu-item {
+.menu-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
   padding: 16px 20px;
-  border: none;
   background: transparent;
   color: var(--text);
   cursor: pointer;
-  transition: var(--transition);
-  width: 100%;
-  text-align: left;
-  border-bottom: 1px solid var(--border);
+  transition: background 0.2s ease;
+  border-bottom: 1px solid var(--border-light);
 }
 
-.profile-menu-item:last-child {
+.menu-item:last-child {
   border-bottom: none;
 }
 
-.profile-menu-item:hover {
-  background: var(--border-light);
+.menu-item:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 
-.profile-menu-item.danger {
+.menu-item.danger {
   color: #ef4444;
 }
 
-.profile-menu-item.danger:hover {
-  background: rgba(239, 68, 68, 0.1);
+.menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.08);
 }
 
-.profile-menu-icon {
-  width: 20px;
-  text-align: center;
+.menu-icon {
+  width: 24px;
+  font-size: 1.2rem;
+  color: var(--green);
+}
+
+.menu-text {
+  flex: 1;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+/* Modern Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #ccc;
+  border-radius: 24px;
+  transition: background 0.3s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.3s;
+}
+
+.toggle-switch input:checked + .slider {
+  background-color: var(--green);
+}
+
+.toggle-switch input:checked + .slider:before {
+  transform: translateX(20px);
 }
 
 /* Responsive Design */
@@ -1300,6 +1505,7 @@ input:focus, select:focus {
   margin: 0 auto;
 }
 
+/*
 .profile-header {
   text-align: center;
   padding: 24px;
@@ -1393,7 +1599,7 @@ input:focus, select:focus {
 .profile-menu-icon {
   width: 20px;
   text-align: center;
-}
+}*/
 
 /* Responsive Design */
 @media (max-width: 768px) {
@@ -1900,7 +2106,8 @@ input:checked + .slider:before {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 0px;
+  padding: 0;
 }
 
 .section-head h2 {
