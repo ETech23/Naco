@@ -357,7 +357,7 @@ setupNetworkMonitoring() {
 document.addEventListener('click', (e) => {
   if (e.target.closest('#login-btn') || e.target.closest('.login-trigger')) {
     e.preventDefault();
-    this.openLoginModal();
+    window.location.href = 'auth.html';
   }
 });
 
@@ -558,7 +558,7 @@ this.$('#view-all-featured')?.addEventListener('click', () => this.showAllFeatur
         switch (target.id) {
           case 'login-from-profile':
             this.closeProfilePage();
-            this.openLoginModal();
+            window.location.href = 'auth.html';
             break;
           case 'profile-bookings':
             this.closeProfilePage();
@@ -610,7 +610,7 @@ this.$('#view-all-featured')?.addEventListener('click', () => this.showAllFeatur
           const artisanId = target.dataset.artisanId;
           if (!this.state.user) {
             this.hideModal();
-            this.openLoginModal();
+            window.location.href = 'auth.html';
             return;
           }
           this.openBookingForm(artisanId);
@@ -620,7 +620,7 @@ this.$('#view-all-featured')?.addEventListener('click', () => this.showAllFeatur
           const artisanId = target.dataset.artisanId;
           if (!this.state.user) {
             this.hideModal();
-            this.openLoginModal();
+            window.location.href = 'auth.html';
             return;
           }
           this.toggleFavorite(artisanId);
@@ -736,8 +736,8 @@ async handleNotificationClick(notificationId) {
 
     if (bookingId) {
       // Close notifications first
-      this.closeNotificationsPage?.();
-      this.hideModal?.();
+     // this.closeNotificationsPage?.();
+     // this.hideModal?.();
       
       // Navigate to booking details after a short delay
       setTimeout(() => {
@@ -1380,7 +1380,7 @@ renderSearchResultCard(artisan) {
   if (!this.state.user) {
     e.target.checked = !isChecked;
     this.closeProfilePage();
-    setTimeout(() => this.openLoginModal(), 100);
+    setTimeout(() => window.location.href = 'auth.html', 100);
     return;
   }
 
@@ -1453,9 +1453,11 @@ updateRoleUI(role) {
 
   handleFabClick() {
     if (this.state.user?.role === 'artisan') {
-      this.openMyClients();
+        window.location.href="clients.html";
+      // this.openMyClients();
     } else {
-      this.openQuickBooking();
+        window.location.href="bookings.html";
+      // this.openQuickBooking();
     }
   }
 
@@ -2221,7 +2223,7 @@ async handleSignup() {
 
   async openProfileUpdate() {
     if (!this.state.user) {
-      this.openLoginModal();
+      window.location.href = 'auth.html';
       return;
     }
 
@@ -2287,7 +2289,7 @@ async handleSignup() {
 
     async openProfileUpdate() {
   if (!this.state.user) {
-    this.openLoginModal();
+    window.location.href = 'auth.html';
     return;
   }
   
@@ -2628,7 +2630,7 @@ async performLogoutCleanup() {
             
             if (!this.state.user) {
               this.hideModal();
-              setTimeout(() => this.openLoginModal(), 100);
+              setTimeout(() => window.location.href = 'auth.html', 100);
               return;
             }
             
@@ -2660,7 +2662,7 @@ async performLogoutCleanup() {
             
             if (!this.state.user) {
               this.hideModal();
-              setTimeout(() => this.openLoginModal(), 100);
+              setTimeout(() => window.location.href = 'auth.html', 100);
               return;
             }
             
@@ -2690,7 +2692,7 @@ async performLogoutCleanup() {
   // Check authentication first
   if (!this.state.user) {
     console.log('User not authenticated, showing login modal');
-    this.openLoginModal();
+    window.location.href = 'auth.html';
     return;
   }
 
@@ -3065,7 +3067,7 @@ async performLogoutCleanup() {
   // Quick Actions
   openQuickBooking() {
     if (!this.state.user) {
-      this.openLoginModal();
+      window.location.href = 'auth.html';
       return;
     }
 
@@ -3784,7 +3786,7 @@ bindBookingActionHandlers(booking) {
 
     async handleBookingAction(bookingId, action) {
   if (!this.state.user) {
-    this.openLoginModal();
+    window.location.href = 'auth.html';
     return;
   }
 
@@ -4126,7 +4128,7 @@ bindBookingActionHandlers(booking) {
 
     async openNotifications(options = {}) {
   if (!this.state.user) {
-    this.openLoginModal();
+    window.location.href = 'auth.html';
     return;
   }
 
@@ -5009,7 +5011,7 @@ openBookingDetailsOverlay(bookingId) {
 
   async handlePremiumSubscription(plan) {
     if (!this.state.user) {
-      this.openLoginModal();
+      window.location.href = 'auth.html';
       return;
     }
 
@@ -5366,7 +5368,7 @@ showModal(content, options = {}) {
 }
 
 // Enhanced closeModalById with proper parent-child cleanup
-closeModalById(modalId) {
+/** closeModalById(modalId) {
   const modalIndex = this.modalStack.findIndex(m => m.id === modalId);
   if (modalIndex === -1) return;
 
@@ -5402,6 +5404,61 @@ closeModalById(modalId) {
   setTimeout(() => {
     if (modal.element.parentNode) {
       modal.element.remove();
+    }
+    
+    this.modalStack.splice(modalIndex, 1);
+
+    // Restore body scroll only when no root modals remain
+    const rootModals = this.modalStack.filter(m => !m.parent);
+    if (rootModals.length === 0) {
+      document.body.style.overflow = '';
+    }
+  }, 200);
+} **/
+
+closeModalById(modalId) {
+  const modalIndex = this.modalStack.findIndex(m => m.id === modalId);
+  if (modalIndex === -1) return;
+
+  const modal = this.modalStack[modalIndex];
+  
+  // Close all child modals recursively
+  if (modal.children && modal.children.length > 0) {
+    [...modal.children].forEach(childId => {
+      this.closeModalById(childId);
+    });
+  }
+  
+  // Remove from parent's children array
+  if (modal.parent) {
+    const parentModal = this.modalStack.find(m => m.id === modal.parent);
+    if (parentModal && parentModal.children) {
+      const childIndex = parentModal.children.indexOf(modalId);
+      if (childIndex > -1) {
+        parentModal.children.splice(childIndex, 1);
+      }
+    }
+  }
+  
+  // Remove ALL event listeners
+  if (modal.element._keydownHandler) {
+    document.removeEventListener('keydown', modal.element._keydownHandler);
+    delete modal.element._keydownHandler;
+  }
+  
+  // Remove click listeners by cloning
+  const clone = modal.element.cloneNode(true);
+  if (modal.element.parentNode) {
+    modal.element.parentNode.replaceChild(clone, modal.element);
+  }
+
+  // Animation out
+  clone.classList.remove('modal-active');
+  clone.classList.add('modal-closing');
+
+  setTimeout(() => {
+    if (clone.parentNode) {
+      clone.remove();
     }
     
     this.modalStack.splice(modalIndex, 1);
@@ -5515,36 +5572,6 @@ hideModal() {
     const topModal = this.modalStack[this.modalStack.length - 1];
     this.closeModalById(topModal.id);
   }
-}
-
-closeModalById(modalId) {
-  const modalIndex = this.modalStack.findIndex(m => m.id === modalId);
-  if (modalIndex === -1) return;
-
-  const modal = this.modalStack[modalIndex];
-  
-  // Remove event listeners
-  if (modal.element._keydownHandler) {
-    document.removeEventListener('keydown', modal.element._keydownHandler);
-  }
-
-  // Animation out
-  modal.element.classList.remove('modal-active');
-  modal.element.classList.add('modal-closing');
-
-  setTimeout(() => {
-    if (modal.element.parentNode) {
-      modal.element.remove();
-    }
-    
-    // Remove from stack
-    this.modalStack.splice(modalIndex, 1);
-
-    // Restore body scroll only when no modals remain
-    if (this.modalStack.length === 0) {
-      document.body.style.overflow = '';
-    }
-  }, 200);
 }
 
 closeAllModals() {
@@ -5785,14 +5812,14 @@ isModalOpen(type) {
       switch (action) {
         case 'book':
           if (!this.state.user) {
-            this.openLoginModal();
+            window.location.href = 'auth.html';
             return;
           }
           this.openBookingForm(artisanId);
           break;
         case 'favorite':
           if (!this.state.user) {
-            this.openLoginModal();
+            window.location.href = 'auth.html';
             return;
           }
           this.toggleFavorite(artisanId);

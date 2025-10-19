@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - Naco</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* Use same CSS variables from profile.html */
+    :root {
+      --golden: #c9b037;
+      --green: #0f7a4a;
+      --green-light: #10955a;
+      --green-dark: #0d5a38;
+      --bg: #000000;
+      --card: #1a1a1a;
+      --text: #ffffff;
+      --muted: #888888;
+      --border: #333333;
+      --radius: 16px;
+      --radius-sm: 8px;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
+    }
+
+    body.light {
+      --bg: #f8faf9;
+      --card: #ffffff;
+      --text: #000000;
+      --muted: #666666;
+      --border: #e2e8f0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .settings-page {
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    .settings-header {
+      position: sticky;
+      top: 0;
+      background: var(--card);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: var(--shadow);
+      z-index: 100;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .back-button {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: var(--text);
+      cursor: pointer;
+      padding: 8px;
+    }
+
+    .settings-header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    .settings-content {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .settings-section {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .settings-section h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--green);
+    }
+
+    .setting-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .setting-item:last-child {
+      border-bottom: none;
+    }
+
+    .setting-info {
+      flex: 1;
+    }
+
+    .setting-info h3 {
+      font-size: 15px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .setting-info p {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 52px;
+      height: 28px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--border);
+      border-radius: 28px;
+      transition: 0.3s;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 4px;
+      bottom: 4px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+
+    input:checked + .slider {
+      background: var(--green);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(24px);
+    }
+
+    .btn-danger {
+      width: 100%;
+      padding: 14px;
+      background: #dc2626;
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    .btn-secondary {
+      width: 100%;
+      padding: 14px;
+      background: var(--border);
+      color: var(--text);
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--card);
+      padding: 16px 24px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      z-index: 2000;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translate(-50%, 20px);
+      }
+      to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="settings-page">
+    <header class="settings-header">
+      <button id="back-btn" class="back-button">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+      <h1>Settings</h1>
+    </header>
+
+    <div class="settings-content">
+      <!-- Appearance -->
+      <div class="settings-section">
+        <h2>Appearance</h2>
+        <div class="setting-item">
+          <div class="setting-info">
+            <h3>Dark Mode</h3>
+            <p>Switch between light and dark themes</p>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="theme-toggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Notifications -->
+      <div class="settings-section">
+        <h2>Notifications</h2>
+        <div class="setting-item">
+          <div class="setting-info">
+            <h3>Push Notifications</h3>
+            <p>Receive booking and message alerts</p>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="notifications-toggle" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <h3>Email Notifications</h3>
+            <p>Get updates via email</p>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="email-toggle" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Privacy -->
+      <div class="settings-section">
+        <h2>Privacy & Security</h2>
+        <div class="setting-item">
+          <div class="setting-info">
+            <h3>Change Password</h3>
+            <p>Update your account password</p>
+          </div>
+          <button id="change-password" class="btn-secondary">Change</button>
+        </div>
+      </div>
+
+      <!-- Data -->
+      <div class="settings-section">
+        <h2>Data Management</h2>
+        <button id="clear-cache" class="btn-secondary">
+          <i class="fas fa-trash"></i> Clear Cache
+        </button>
+        <button id="export-data" class="btn-secondary">
+          <i class="fas fa-download"></i> Export My Data
+        </button>
+      </div>
+
+      <!-- Danger Zone -->
+      <div class="settings-section">
+        <h2>Danger Zone</h2>
+        <button id="delete-account" class="btn-danger">
+          <i class="fas fa-exclamation-triangle"></i> Delete Account
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = window.location.hostname === 'localhost' 
+      ? 'http://localhost:8091'
+      : 'https://your-production-domain.com';
+
+    // Back button
+    document.getElementById('back-btn').addEventListener('click', () => {
+      window.history.back();
+    });
+
+    // Theme toggle
+    const themeToggle = document.getElementById('theme-toggle');
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    document.body.classList.toggle('light', savedTheme === 'light');
+    themeToggle.checked = savedTheme === 'light';
+
+    themeToggle.addEventListener('change', () => {
+      const newTheme = themeToggle.checked ? 'light' : 'dark';
+      document.body.classList.toggle('light', themeToggle.checked);
+      localStorage.setItem('theme', newTheme);
+      showToast('Theme updated', 'success');
+    });
+
+    // Notifications toggle
+    document.getElementById('notifications-toggle').addEventListener('change', (e) => {
+      if (e.target.checked) {
+        requestNotificationPermission();
+      }
+      showToast('Notification settings updated', 'success');
+    });
+
+    // Email toggle
+    document.getElementById('email-toggle').addEventListener('change', () => {
+      showToast('Email notification settings updated', 'success');
+    });
+
+    // Change password
+    document.getElementById('change-password').addEventListener('click', () => {
+      const newPassword = prompt('Enter new password:');
+      if (newPassword) {
+        // Call API to change password
+        showToast('Password change feature coming soon', 'info');
+      }
+    });
+
+    // Clear cache
+    document.getElementById('clear-cache').addEventListener('click', () => {
+      if (confirm('Clear all cached data?')) {
+        localStorage.removeItem('cachedData');
+        showToast('Cache cleared', 'success');
+      }
+    });
+
+    // Export data
+    document.getElementById('export-data').addEventListener('click', () => {
+      showToast('Preparing your data export...', 'info');
+      // Implement data export
+    });
+
+    // Delete account
+    document.getElementById('delete-account').addEventListener('click', () => {
+      if (confirm('Are you sure? This action cannot be undone!')) {
+        if (confirm('Really delete your account? All data will be lost!')) {
+          // Call API to delete account
+          showToast('Account deletion feature coming soon', 'info');
+        }
+      }
+    });
+
+    function requestNotificationPermission() {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+  </script>
+</body>
+</html>

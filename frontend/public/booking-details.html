@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Booking Details - Naco</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --golden: #c9b037;
+      --green: #0f7a4a;
+      --green-light: #10955a;
+      --bg: #000000;
+      --card: #1a1a1a;
+      --text: #ffffff;
+      --muted: #888888;
+      --border: #333333;
+      --radius: 16px;
+      --radius-sm: 8px;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
+    }
+
+    body.light {
+      --bg: #f8faf9;
+      --card: #ffffff;
+      --text: #000000;
+      --muted: #666666;
+      --border: #e2e8f0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .details-page {
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    .details-header {
+      position: sticky;
+      top: 0;
+      background: var(--card);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: var(--shadow);
+      z-index: 100;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .back-button {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: var(--text);
+      cursor: pointer;
+      padding: 8px;
+    }
+
+    .details-header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    .details-content {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .status-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-confirmed { background: #dbeafe; color: #1e40af; }
+    .status-in_progress { background: #e0e7ff; color: #3730a3; }
+    .status-completed { background: #d1fae5; color: #065f46; }
+    .status-pending_confirmation { background: #fce7f3; color: #831843; }
+    .status-declined { background: #fee2e2; color: #991b1b; }
+    .status-cancelled { background: #fee2e2; color: #991b1b; }
+
+    .reference-number {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .info-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .info-card h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--green);
+    }
+
+    .info-row {
+      display: flex;
+      align-items: start;
+      gap: 16px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .info-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--bg);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--green);
+      flex-shrink: 0;
+    }
+
+    .info-content {
+      flex: 1;
+    }
+
+    .info-label {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .info-value {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .action-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--green);
+      color: white;
+    }
+
+    .btn-secondary {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    .btn-danger {
+      background: #dc2626;
+      color: white;
+    }
+
+    .btn-success {
+      background: var(--green);
+      color: white;
+    }
+
+    .loading-state {
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .loading-state i {
+      font-size: 48px;
+      color: var(--muted);
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .empty-state i {
+      font-size: 64px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .notice-box {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 16px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 20px;
+    }
+
+    .notice-box p {
+      color: #92400e;
+      font-size: 14px;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="details-page">
+    <header class="details-header">
+      <button id="back-btn" class="back-button">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+      <h1>Booking Details</h1>
+    </header>
+
+    <div class="details-content" id="details-content">
+      <div class="loading-state">
+        <i class="fas fa-spinner"></i>
+        <p>Loading booking details...</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as API from './js/api.js';
+
+    let booking = null;
+    let currentUser = null;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const bookingId = urlParams.get('id');
+
+      console.log('🔍 Booking ID from URL:', bookingId);
+
+      if (!bookingId) {
+        showError('No booking ID provided');
+        return;
+      }
+
+      const userData = localStorage.getItem('userData');
+      if (!userData) {
+        window.location.href = 'auth.html';
+        return;
+      }
+      
+      try {
+        currentUser = JSON.parse(userData);
+        console.log('🔍 Current user loaded:', currentUser);
+      } catch (e) {
+        console.error('❌ Failed to parse user data:', e);
+        window.location.href = 'auth.html';
+        return;
+      }
+
+      await loadBookingDetails(bookingId);
+      
+      const theme = localStorage.getItem('theme') || 'dark';
+      document.body.classList.toggle('light', theme === 'light');
+    });
+
+    document.getElementById('back-btn').addEventListener('click', () => {
+      window.history.back();
+    });
+
+    async function loadBookingDetails(bookingId) {
+      try {
+        console.log('📡 Fetching booking details for ID:', bookingId);
+        
+        // Fetch all bookings and find the one we need
+        const bookings = await API.getUserBookings();
+        console.log('📦 All bookings received:', bookings.length);
+        
+        booking = bookings.find(b => {
+          const bId = (b.id || b._id).toString();
+          console.log('🔍 Checking booking:', bId, 'against:', bookingId);
+          return bId === bookingId.toString();
+        });
+
+        if (!booking) {
+          throw new Error('Booking not found in your bookings list');
+        }
+        
+        console.log('✅ Booking found:', booking);
+        
+        if (!booking.status) {
+          console.error('❌ Invalid booking structure - missing status:', booking);
+          throw new Error('Invalid booking data structure');
+        }
+        
+        console.log('✅ Booking validated, rendering...');
+        renderBookingDetails();
+      } catch (error) {
+        console.error('❌ Error loading booking:', error);
+        showError(`Failed to load booking: ${error.message}`);
+      }
+    }
+
+    function renderBookingDetails() {
+      const container = document.getElementById('details-content');
+      
+      console.log('🎨 Starting render...');
+      console.log('🔍 Current user:', currentUser);
+      console.log('🔍 Booking:', booking);
+      
+      // CRITICAL FIX: Normalize user ID
+      const currentUserId = (currentUser.id || currentUser._id || '').toString();
+      console.log('🔍 Current user ID (normalized):', currentUserId);
+      
+      // CRITICAL FIX: Normalize artisan ID with multiple fallbacks
+      let artisanId = booking.bookedArtisanId || booking.artisanId || booking.artisan;
+      if (artisanId && typeof artisanId === 'object') {
+        artisanId = artisanId._id || artisanId.id;
+      }
+      artisanId = (artisanId || '').toString();
+      console.log('🔍 Artisan ID (normalized):', artisanId);
+      
+      // CRITICAL FIX: Normalize client ID with multiple fallbacks
+      let clientId = booking.bookerUserId || booking.clientId || booking.client;
+      if (clientId && typeof clientId === 'object') {
+        clientId = clientId._id || clientId.id;
+      }
+      clientId = (clientId || '').toString();
+      console.log('🔍 Client ID (normalized):', clientId);
+      
+      const isArtisan = currentUserId === artisanId;
+      const isClient = currentUserId === clientId;
+      
+      console.log('✅ User role - Is Artisan:', isArtisan, '| Is Client:', isClient);
+
+      // Get display names with fallbacks
+      const artisanName = booking.artisanName || 
+                         booking.artisan?.name || 
+                         (typeof booking.artisan === 'string' ? 'Artisan' : 'Unknown Artisan');
+      
+      const clientName = booking.clientName || 
+                        booking.client?.name || 
+                        (typeof booking.client === 'string' ? 'Client' : 'Unknown Client');
+
+      container.innerHTML = `
+        <div class="status-card">
+          <span class="status-badge status-${booking.status || 'pending'}">${formatStatus(booking.status)}</span>
+          <div class="reference-number">Ref: ${escapeHtml(booking.reference || 'N/A')}</div>
+        </div>
+
+        ${booking.status === 'pending_confirmation' && isClient ? `
+          <div class="notice-box">
+            <p><i class="fas fa-info-circle"></i> <strong>Action Required:</strong> The artisan has marked this job as completed. Please review and confirm.</p>
+          </div>
+        ` : ''}
+
+        ${booking.status === 'pending_confirmation' && isArtisan ? `
+          <div class="notice-box">
+            <p><i class="fas fa-clock"></i> Waiting for client to confirm job completion...</p>
+          </div>
+        ` : ''}
+
+        <div class="info-card">
+          <h2><i class="fas fa-briefcase"></i> Service Details</h2>
+          <div class="info-row">
+            <div class="info-icon">
+              <i class="fas fa-wrench"></i>
+            </div>
+            <div class="info-content">
+              <div class="info-label">Service</div>
+              <div class="info-value">${escapeHtml(booking.service || 'Service')}</div>
+            </div>
+          </div>
+          <div class="info-row">
+            <div class="info-icon">
+              <i class="fas fa-align-left"></i>
+            </div>
+            <div class="info-content">
+              <div class="info-label">Description</div>
+              <div class="info-value">${escapeHtml(booking.description || 'No description')}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card">
+          <h2><i class="fas fa-calendar"></i> Schedule</h2>
+          <div class="info-row">
+            <div class="info-icon">
+              <i class="fas fa-calendar-day"></i>
+            </div>
+            <div class="info-content">
+              <div class="info-label">Date</div>
+              <div class="info-value">${formatDate(booking.service_date)}</div>
+            </div>
+          </div>
+          <div class="info-row">
+            <div class="info-icon">
+              <i class="fas fa-clock"></i>
+            </div>
+            <div class="info-content">
+              <div class="info-label">Time</div>
+              <div class="info-value">${escapeHtml(booking.service_time || 'TBD')}</div>
+            </div>
+          </div>
+          <div class="info-row">
+            <div class="info-icon">
+              <i class="fas fa-map-marker-alt"></i>
+            </div>
+            <div class="info-content">
+              <div class="info-label">Location</div>
+              <div class="info-value">${escapeHtml(booking.location || 'Location TBD')}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card">
+          <h2><i class="fas fa-users"></i> People</h2>
+          <div class="info-row">
+            <div class="info-icon">
+              <i class="fas fa-user"></i>
+            </div>
+            <div class="info-content">
+              <div class="info-label">${isArtisan ? 'Client' : 'Artisan'}</div>
+              <div class="info-value">${escapeHtml(isArtisan ? clientName : artisanName)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card">
+          <h2><i class="fas fa-money-bill"></i> Payment</h2>
+          <div class="info-row">
+            <div class="info-icon">
+              <i class="fas fa-dollar-sign"></i>
+            </div>
+            <div class="info-content">
+              <div class="info-label">Amount</div>
+              <div class="info-value">${formatCurrency(booking.amount || 0)}</div>
+            </div>
+          </div>
+          <div class="info-row">
+            <div class="info-icon">
+              <i class="fas fa-credit-card"></i>
+            </div>
+            <div class="info-content">
+              <div class="info-label">Payment Method</div>
+              <div class="info-value">${formatPaymentMethod(booking.payment_method)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          ${renderActionButtons(booking, isArtisan, isClient)}
+        </div>
+      `;
+
+      console.log('✅ Render complete');
+      bindActionHandlers();
+    }
+
+    function renderActionButtons(booking, isArtisan, isClient) {
+      const status = booking.status;
+      let buttons = '';
+
+      if (isArtisan) {
+        if (status === 'pending') {
+          buttons += `
+            <button class="btn btn-success" data-action="confirmed">
+              <i class="fas fa-check"></i> Accept Booking
+            </button>
+            <button class="btn btn-danger" data-action="declined">
+              <i class="fas fa-times"></i> Decline Booking
+            </button>
+          `;
+        } else if (status === 'confirmed') {
+          buttons += `
+            <button class="btn btn-primary" data-action="in_progress">
+              <i class="fas fa-play"></i> Start Job
+            </button>
+          `;
+        } else if (status === 'in_progress') {
+          buttons += `
+            <button class="btn btn-success" data-action="completed">
+              <i class="fas fa-check-circle"></i> Mark as Completed
+            </button>
+          `;
+        }
+      }
+
+      if (isClient) {
+        if (status === 'pending') {
+          buttons += `
+            <button class="btn btn-danger" data-action="cancelled">
+              <i class="fas fa-ban"></i> Cancel Booking
+            </button>
+          `;
+        } else if (status === 'pending_confirmation') {
+          buttons += `
+            <button class="btn btn-success" data-action="confirm_completion">
+              <i class="fas fa-check-circle"></i> Confirm Completion
+            </button>
+            <button class="btn btn-danger" data-action="reject_completion">
+              <i class="fas fa-times-circle"></i> Work Not Complete
+            </button>
+          `;
+        } else if (status === 'completed') {
+          buttons += `
+            <button class="btn btn-secondary" onclick="window.location.href='index.html?review=${booking.bookedArtisanId || booking.artisanId}'">
+              <i class="fas fa-star"></i> Leave Review
+            </button>
+          `;
+        }
+      }
+
+      return buttons;
+    }
+
+    function bindActionHandlers() {
+      document.querySelectorAll('[data-action]').forEach(button => {
+        button.addEventListener('click', async (e) => {
+          const action = e.target.closest('[data-action]').dataset.action;
+          await handleBookingAction(action);
+        });
+      });
+    }
+
+    async function handleBookingAction(action) {
+      const confirmMessages = {
+        'confirmed': 'Accept this booking?',
+        'declined': 'Decline this booking?',
+        'in_progress': 'Start this job?',
+        'completed': 'Mark this job as completed?',
+        'confirm_completion': 'Confirm that the work is completed to your satisfaction?',
+        'reject_completion': 'Report that the work is not complete?',
+        'cancelled': 'Cancel this booking?'
+      };
+
+      if (confirmMessages[action] && !confirm(confirmMessages[action])) {
+        return;
+      }
+
+      try {
+        const bookingId = booking._id || booking.id;
+        console.log('🔄 Updating booking:', bookingId, 'with action:', action);
+        
+        await API.updateBookingStatus(bookingId, action);
+        showToast('Booking updated successfully', 'success');
+        
+        setTimeout(() => window.location.reload(), 1500);
+      } catch (error) {
+        console.error('Failed to update booking:', error);
+        showToast(`Failed to update: ${error.message}`, 'error');
+      }
+    }
+
+    function formatStatus(status) {
+      const statusMap = {
+        'pending': 'PENDING',
+        'confirmed': 'CONFIRMED',
+        'in_progress': 'IN PROGRESS',
+        'completed': 'COMPLETED',
+        'pending_confirmation': 'AWAITING CONFIRMATION',
+        'declined': 'DECLINED',
+        'cancelled': 'CANCELLED'
+      };
+      return statusMap[status] || (status || 'UNKNOWN').toUpperCase();
+    }
+
+    function formatDate(dateString) {
+      if (!dateString) return 'Date TBD';
+      try {
+        return new Date(dateString).toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      } catch (e) {
+        return 'Invalid Date';
+      }
+    }
+
+    function formatPaymentMethod(method) {
+      const methodMap = {
+        'cash': 'Cash on Completion',
+        'transfer': 'Bank Transfer',
+        'paystack': 'Card Payment'
+      };
+      return methodMap[method] || method || 'Not specified';
+    }
+
+    function formatCurrency(amount) {
+      return new Intl.NumberFormat('en-NG', {
+        style: 'currency',
+        currency: 'NGN',
+        minimumFractionDigits: 0
+      }).format(amount);
+    }
+
+    function escapeHtml(text) {
+      if (!text && text !== 0) return '';
+      const div = document.createElement('div');
+      div.textContent = String(text);
+      return div.innerHTML;
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.textContent = message;
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--card);
+        padding: 16px 24px;
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        z-index: 2000;
+        border-left: 4px solid ${type === 'success' ? 'var(--green)' : '#dc2626'};
+      `;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    function showError(message) {
+      document.getElementById('details-content').innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-exclamation-circle"></i>
+          <p>${message}</p>
+          <button onclick="window.history.back()" class="btn btn-primary" style="margin-top: 16px;">Go Back</button>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

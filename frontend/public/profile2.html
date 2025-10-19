@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Profile - Naco</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/profile.css">
+</head>
+<body>
+  <div class="profile-page">
+    <!-- Header -->
+    <header class="profile-header">
+      <button id="back-btn" class="back-button">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+      <h1>My Profile</h1>
+      <button id="edit-profile-btn" class="edit-button">
+        <i class="fas fa-edit"></i>
+      </button>
+    </header>
+
+    <!-- Profile Content -->
+    <div class="profile-content">
+      <div class="profile-avatar-section">
+        <img id="profile-avatar" src="../assets/avatar-placeholder.png" alt="Profile" class="profile-avatar-large">
+        <div class="profile-identity">
+          <h2 id="profile-name">Loading...</h2>
+          <p id="profile-role" class="profile-role"></p>
+          <p id="profile-location" class="profile-location"></p>
+        </div>
+      </div>
+
+      <div class="profile-stats" id="profile-stats"></div>
+
+      <div class="profile-info" id="profile-info"></div>
+
+      <div class="profile-actions" id="profile-actions"></div>
+    </div>
+  </div>
+
+  <!-- Edit Profile Modal -->
+  <div id="edit-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Edit Profile</h2>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="edit-profile-form" class="profile-form"></form>
+    </div>
+  </div>
+
+     <script>
+  document.querySelector('#back-btn')?.addEventListener('click', () => {
+    window.location.href = 'index.html';
+  });
+</script>
+
+    
+
+  <script type="module" src="js/api.js"></script>
+  <script type="module" src="js/utils.js"></script>
+  <script type="module" src="js/shared-header.js"></script>
+  <script type="module" src="js/profile2.js"></script>
+</body>
+</html>

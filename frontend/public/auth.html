@@ -6,9 +6,95 @@
     <title>Login - Naco</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        /* Modern CSS Variables */
+        :root {
+            /* Dark Mode as default - Normal Black Theme */
+            --golden: #c9b037;
+            --green: #0f7a4a;
+            --green-light: #10955a;
+            --green-dark: #0d5a38;
+            --accent: linear-gradient(135deg, #0f7a4a 0%, #c9b037 100%);
+            --bg: #000000; /* Pure black background */
+            --card: #1a1a1a; /* Dark gray for cards */
+            --text: #ffffff; /* Pure white text */
+            --muted: #888888; /* Medium gray for muted text */
+            --border: #333333; /* Dark gray borders */
+            --border-light: #444444; /* Slightly lighter borders */
+            --radius: 16px;
+            --radius-sm: 8px;
+            --radius-lg: 24px;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3),
+                    0 2px 4px -2px rgb(0 0 0 / 0.3);
+            --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.3),
+                        0 8px 10px -6px rgb(0 0 0 / 0.3);
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Light Mode Variables */
+        body.light {
+            --bg: #f8faf9;
+            --card: #ffffff;
+            --text: #000000; /* Black text for light mode */
+            --muted: #666666; /* Dark gray for muted text */
+            --border: #e2e8f0;
+            --border-light: #f1f5f9;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1),
+                    0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1),
+                        0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+
+        /* Completely hide scrollbars across all browsers while maintaining scroll functionality */
+        html, body, div, section, main, .scroll-container {
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE and Edge */
+        }
+
+        /* WebKit browsers */
+        html::-webkit-scrollbar, 
+        body::-webkit-scrollbar, 
+        div::-webkit-scrollbar, 
+        section::-webkit-scrollbar,
+        main::-webkit-scrollbar,
+        .scroll-container::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+            background: transparent;
+        }
+
+        /* Additional hack for browsers like DuckDuckGo */
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: -moz-scrollbars-none; /* Older Firefox */
+        }
+
+        /* For specific containers with scrolling */
+        .scroll-container {
+            overflow: auto;
+            -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+        }
+
+        /* Reset and Base */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* HTML and Body Setup */
+        html, body, #app {
+            height: 100%;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            transition: var(--transition-slow);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -17,29 +103,21 @@
             margin: 0;
         }
 
-        [data-theme="dark"] body {
-            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+        body, html {
+            margin: 0;
+            padding: 0;
         }
 
         .auth-container {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(20px);
-            border-radius: 24px;
-            box-shadow: 
-                0 25px 50px -12px rgba(0, 0, 0, 0.25),
-                0 0 0 1px rgba(255, 255, 255, 0.1);
+            background: var(--card);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
             padding: 40px;
             width: 100%;
             max-width: 420px;
             position: relative;
             animation: slideUp 0.4s ease;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        [data-theme="dark"] .auth-container {
-            background: rgba(30, 30, 35, 0.95);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #e2e8f0;
+            border: 1px solid var(--border);
         }
 
         @keyframes slideUp {
@@ -61,23 +139,15 @@
         .auth-title {
             font-size: 28px;
             font-weight: 700;
-            color: #1e293b;
+            color: var(--text);
             margin-bottom: 8px;
             letter-spacing: -0.025em;
         }
 
-        [data-theme="dark"] .auth-title {
-            color: #f1f5f9;
-        }
-
         .auth-subtitle {
-            color: #64748b;
+            color: var(--muted);
             font-size: 16px;
             font-weight: 400;
-        }
-
-        [data-theme="dark"] .auth-subtitle {
-            color: #94a3b8;
         }
 
         .form-group {
@@ -89,87 +159,61 @@
             display: block;
             font-size: 14px;
             font-weight: 500;
-            color: #374151;
+            color: var(--text);
             margin-bottom: 8px;
             letter-spacing: 0.025em;
-        }
-
-        [data-theme="dark"] .form-group label {
-            color: #d1d5db;
         }
 
         .form-input {
             width: 100%;
             padding: 14px 16px;
-            border: 2px solid #e5e7eb;
-            border-radius: 12px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius-sm);
             font-size: 16px;
-            background: rgba(255, 255, 255, 0.8);
-            transition: all 0.2s ease;
+            background: var(--bg);
+            color: var(--text);
+            transition: var(--transition);
             outline: none;
             box-sizing: border-box;
         }
 
         .form-input:focus {
-            border-color: #3b82f6;
-            background: rgba(255, 255, 255, 1);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            border-color: var(--green);
+            background: var(--card);
+            box-shadow: 0 0 0 3px rgba(15, 122, 74, 0.1);
         }
 
-        [data-theme="dark"] .form-input {
-            background: rgba(55, 65, 81, 0.8);
-            border-color: #374151;
-            color: #f3f4f6;
-        }
-
-        [data-theme="dark"] .form-input:focus {
-            background: rgba(55, 65, 81, 1);
-            border-color: #60a5fa;
-            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
-        }
-
-        [data-theme="dark"] .form-input::placeholder {
-            color: #9ca3af;
+        .form-input::placeholder {
+            color: var(--muted);
         }
 
         .form-select {
             width: 100%;
             padding: 14px 16px;
-            border: 2px solid #e5e7eb;
-            border-radius: 12px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius-sm);
             font-size: 16px;
-            background: rgba(255, 255, 255, 0.8);
-            transition: all 0.2s ease;
+            background: var(--bg);
+            color: var(--text);
+            transition: var(--transition);
             outline: none;
             cursor: pointer;
             box-sizing: border-box;
         }
 
         .form-select:focus {
-            border-color: #3b82f6;
-            background: rgba(255, 255, 255, 1);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        [data-theme="dark"] .form-select {
-            background: rgba(55, 65, 81, 0.8);
-            border-color: #374151;
-            color: #f3f4f6;
-        }
-
-        [data-theme="dark"] .form-select:focus {
-            background: rgba(55, 65, 81, 1);
-            border-color: #60a5fa;
-            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+            border-color: var(--green);
+            background: var(--card);
+            box-shadow: 0 0 0 3px rgba(15, 122, 74, 0.1);
         }
 
         .btn-google {
             width: 100%;
             padding: 14px 20px;
-            border: 2px solid #e5e7eb;
-            border-radius: 12px;
-            background: white;
-            color: #374151;
+            border: 2px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--card);
+            color: var(--text);
             font-size: 16px;
             font-weight: 500;
             display: flex;
@@ -177,39 +221,27 @@
             justify-content: center;
             gap: 12px;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: var(--transition);
             margin-bottom: 20px;
         }
 
         .btn-google:hover {
-            background: #f9fafb;
-            border-color: #d1d5db;
+            background: var(--border);
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        [data-theme="dark"] .btn-google {
-            background: rgba(55, 65, 81, 0.8);
-            border-color: #374151;
-            color: #f3f4f6;
-        }
-
-        [data-theme="dark"] .btn-google:hover {
-            background: rgba(75, 85, 99, 0.9);
-            border-color: #4b5563;
+            box-shadow: var(--shadow);
         }
 
         .btn-primary {
             width: 100%;
             padding: 14px 20px;
-            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            background: var(--green);
             color: white;
             border: none;
-            border-radius: 12px;
+            border-radius: var(--radius-sm);
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: var(--transition);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -218,8 +250,9 @@
         }
 
         .btn-primary:hover:not(:disabled) {
+            background: var(--green-light);
             transform: translateY(-1px);
-            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+            box-shadow: 0 10px 25px rgba(15, 122, 74, 0.3);
         }
 
         .btn-primary:active {
@@ -237,7 +270,7 @@
             display: flex;
             align-items: center;
             margin: 24px 0;
-            color: #9ca3af;
+            color: var(--muted);
             font-size: 14px;
         }
 
@@ -246,17 +279,12 @@
             content: '';
             flex: 1;
             height: 1px;
-            background: #e5e7eb;
-        }
-
-        [data-theme="dark"] .divider::before,
-        [data-theme="dark"] .divider::after {
-            background: #374151;
+            background: var(--border);
         }
 
         .divider span {
             padding: 0 16px;
-            background: inherit;
+            background: var(--card);
             font-weight: 500;
         }
 
@@ -264,36 +292,24 @@
             text-align: center;
             margin-top: 20px;
             font-size: 14px;
-            color: край6b7280;
-        }
-
-        [data-theme="dark"] .switch-link {
-            color: #9ca3af;
+            color: var(--muted);
         }
 
         .switch-link a {
-            color: #3b82f6;
+            color: var(--green);
             text-decoration: none;
             font-weight: 500;
-            transition: color 0.2s ease;
+            transition: var(--transition);
             cursor: pointer;
         }
 
         .switch-link a:hover {
-            color: #1d4ed8;
+            color: var(--green-light);
             text-decoration: underline;
         }
 
-        [data-theme="dark"] .switch-link a {
-            край#60a5fa;
-        }
-
-        [data-theme="dark"] .switch-link a:hover {
-            color: #93c5fd;
-        }
-
         .auth-form {
-            transition: all 0.3s ease;
+            transition: var(--transition-slow);
         }
 
         .auth-form.hidden {
@@ -309,17 +325,18 @@
             position: absolute;
             top: 20px;
             left: 20px;
-            color: rgba(255, 255, 255, 0.8);
+            color: var(--muted);
             font-size: 16px;
             text-decoration: none;
-            display: крайflex;
+            display: flex;
             align-items: center;
             gap: 8px;
-            transition: all 0.2s ease;
+            transition: var(--transition);
+            z-index: 100;
         }
 
         .back-link:hover {
-            color: white;
+            color: var(--text);
             transform: translateX(-4px);
         }
 
@@ -328,12 +345,13 @@
             top: 20px;
             right: 20px;
             padding: 12px 20px;
-            border-radius: 8px;
+            border-radius: var(--radius-sm);
             color: white;
             font-weight: 500;
             z-index: 1000;
             transform: translateX(400px);
-            transition: transform 0.3s ease;
+            transition: var(--transition);
+            border: 1px solid var(--border);
         }
 
         .toast.show {
@@ -341,111 +359,18 @@
         }
 
         .toast.success {
-            background: #10b981;
+            background: var(--green);
         }
 
         .toast.error {
-            background: #ef4444;
+            background: #dc2626;
         }
 
         .toast.info {
-            background: #3b82f6;
+            background: var(--green);
         }
     </style>
 </head>
-<script>
-// Check if user is already logged in
-/**function checkAuthStatus() {
-    const authToken = localStorage.getItem('authToken');
-    const userData = localStorage.getItem('user');
-    
-    // If user has auth token and user data, redirect to main app
-    if (authToken && userData) {
-        // Show a brief message before redirecting
-        showToast('You are already logged in. Redirecting...', 'info');
-        
-        // Redirect to main application after a short delay
-        setTimeout(() => {
-            window.location.href = 'index.html';
-        }, 1500);
-        
-        return true;
-    }
-    
-    return false;
-}**/
-checkAuthStatus() {
-  const authToken = localStorage.getItem('authToken');
-  const userData = localStorage.getItem('user');
-
-  if (authToken && userData) {
-    try {
-      const user = JSON.parse(userData);
-
-      // restore user state
-      this.setState({ user });
-
-      return true; // user is logged in
-    } catch (err) {
-      console.error('Failed to parse stored user data:', err);
-
-      // clear corrupted storage
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('user');
-      this.setState({ user: null });
-
-      return false; // treat as not logged in
-    }
-  }
-
-  // no login found
-  this.setState({ user: null });
-  return false;
-}
-
-// Call this function when the page loads
-document.addEventListener('DOMContentLoaded', function() {
-    // Check if user is already authenticated
-    if (checkAuthStatus()) {
-        // Disable form inputs if user is logged in
-        document.querySelectorAll('input, button, select').forEach(element => {
-            element.disabled = true;
-        });
-        
-        // Change the title and subtitle
-        document.getElementById('auth-title').textContent = 'Already Logged In';
-        document.getElementById('auth-subtitle').textContent = 'Redirecting you to the application...';
-    }
-});
-
-// Also check when navigating back to this page
-window.addEventListener('pageshow', function(event) {
-    if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
-        // Page was loaded from cache (back/forward navigation)
-        checkAuthStatus();
-    }
-});
-
-// Toast notification function (if not already defined)
-function showToast(message, type = 'info') {
-    // Check if toast already exists
-    const existingToast = document.querySelector('.toast');
-    if (existingToast) {
-        existingToast.remove();
-    }
-    
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => toast.classList.add('show'), 100);
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
-</script>
 <body>
     <a href="index.html" class="back-link">
         <i class="fas fa-arrow-left"></i>
@@ -464,7 +389,7 @@ function showToast(message, type = 'info') {
             <button type="button" id="google-signin" class="btn-google">
                 <svg class="google-icon" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 край12 23z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                 </svg>
@@ -499,10 +424,10 @@ function showToast(message, type = 'info') {
         <form id="signup-form" class="auth-form hidden">
             <!-- Google Sign Up -->
             <button type="button" id="google-signup" class="btn-google">
-                <svg class="google-icon" viewBox="0 край0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57 край2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <svg class="google-icon" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c край-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                 </svg>
                 Sign up with Google
@@ -552,6 +477,50 @@ function showToast(message, type = 'info') {
     </div>
 
     <script>
+        // Check if user is already logged in
+        function checkAuthStatus() {
+            const authToken = localStorage.getItem('authToken');
+            const userData = localStorage.getItem('user');
+            
+            // If user has auth token and user data, redirect to main app
+            if (authToken && userData) {
+                // Show a brief message before redirecting
+                showToast('You are already logged in. Redirecting...', 'info');
+                
+                // Redirect to main application after a short delay
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 1500);
+                
+                return true;
+            }
+            
+            return false;
+        }
+
+        // Call this function when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is already authenticated
+            if (checkAuthStatus()) {
+                // Disable form inputs if user is logged in
+                document.querySelectorAll('input, button, select').forEach(element => {
+                    element.disabled = true;
+                });
+                
+                // Change the title and subtitle
+                document.getElementById('auth-title').textContent = 'Already Logged In';
+                document.getElementById('auth-subtitle').textContent = 'Redirecting you to the application...';
+            }
+        });
+
+        // Also check when navigating back to this page
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
+                // Page was loaded from cache (back/forward navigation)
+                checkAuthStatus();
+            }
+        });
+
         // API Client Implementation
         const API_URL = window.location.hostname === 'localhost' 
             ? 'http://localhost:8091'  // Local development
@@ -661,7 +630,7 @@ function showToast(message, type = 'info') {
         }
 
         // Theme detection
-        const theme = localStorage.getItem('theme') || 'light';
+        const theme = localStorage.getItem('theme') || 'dark';
         document.documentElement.setAttribute('data-theme', theme);
 
         // Toast notification function
@@ -752,7 +721,7 @@ function showToast(message, type = 'info') {
             
             try {
                 signupBtn.disabled = true;
-                signupBtn.innerHTML = '<i class="fas крайfa-spinner fa-spin"></i> Creating account...';
+                signupBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating account...';
                 
                 const user = await registerUser({ name, email, password, location, role });
                 

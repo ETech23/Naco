@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Clients - Naco</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* Same CSS variables from profile.html */
+    :root {
+      --golden: #c9b037;
+      --green: #0f7a4a;
+      --green-light: #10955a;
+      --bg: #000000;
+      --card: #1a1a1a;
+      --text: #ffffff;
+      --muted: #888888;
+      --border: #333333;
+      --radius: 16px;
+      --radius-sm: 8px;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
+    }
+
+    body.light {
+      --bg: #f8faf9;
+      --card: #ffffff;
+      --text: #000000;
+      --muted: #666666;
+      --border: #e2e8f0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .clients-page {
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    .clients-header {
+      position: sticky;
+      top: 0;
+      background: var(--card);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: var(--shadow);
+      z-index: 100;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .back-button {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: var(--text);
+      cursor: pointer;
+      padding: 8px;
+    }
+
+    .clients-header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    .clients-content {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      padding: 16px;
+      border-radius: var(--radius-sm);
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+
+    .stat-number {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--green);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .filter-tab {
+      padding: 8px 16px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+
+    .filter-tab.active {
+      background: var(--green);
+      color: white;
+      border-color: var(--green);
+    }
+
+    .client-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .client-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 12px;
+    }
+
+    .client-info {
+      flex: 1;
+    }
+
+    .client-name {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .client-service {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-confirmed { background: #dbeafe; color: #1e40af; }
+    .status-in_progress { background: #e0e7ff; color: #3730a3; }
+    .status-completed { background: #d1fae5; color: #065f46; }
+    .status-pending_confirmation { background: #fce7f3; color: #831843; }
+
+    .booking-details {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .booking-details div {
+      margin-bottom: 6px;
+    }
+
+    .client-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: var(--green);
+      color: white;
+    }
+
+    .btn-secondary {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    .btn-danger {
+      background: #dc2626;
+      color: white;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .empty-state i {
+      font-size: 64px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .empty-state p {
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="clients-page">
+    <header class="clients-header">
+      <button id="back-btn" class="back-button">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+      <h1>My Clients</h1>
+    </header>
+
+    <div class="clients-content">
+      <div class="stats-grid" id="stats-grid"></div>
+
+      <div class="filter-tabs">
+        <button class="filter-tab active" data-filter="all">All</button>
+        <button class="filter-tab" data-filter="pending">Pending</button>
+        <button class="filter-tab" data-filter="confirmed">Active</button>
+        <button class="filter-tab" data-filter="completed">Completed</button>
+      </div>
+
+      <div id="clients-list"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as API from './js/api.js';
+
+    let allBookings = [];
+    let currentFilter = 'all';
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Check if user is an artisan
+      const userData = localStorage.getItem('userData');
+      const user = userData ? JSON.parse(userData) : null;
+      
+      if (!user || user.role !== 'artisan') {
+        alert('This page is only accessible to artisans');
+        window.location.href = 'profile.html';
+        return;
+      }
+
+      await loadClientBookings();
+      bindEvents();
+      
+      // Apply theme
+      const theme = localStorage.getItem('theme') || 'dark';
+      document.body.classList.toggle('light', theme === 'light');
+    });
+
+    // Back button
+    document.getElementById('back-btn').addEventListener('click', () => {
+      window.history.back();
+    });
+
+    // Load client bookings
+    async function loadClientBookings() {
+      try {
+        const bookings = await API.getUserBookings();
+        
+        // Filter bookings where current user is the artisan
+        const userData = localStorage.getItem('userData');
+        const user = JSON.parse(userData);
+        
+        allBookings = bookings.filter(booking => {
+          const artisanId = booking.bookedArtisanId || booking.artisanId;
+          return artisanId === user.id;
+        });
+
+        renderStats();
+        renderBookings();
+      } catch (error) {
+        console.error('Error loading bookings:', error);
+        showError('Failed to load client bookings');
+      }
+    }
+
+    // Render stats
+    function renderStats() {
+      const stats = {
+        total: allBookings.length,
+        pending: allBookings.filter(b => b.status === 'pending').length,
+        active: allBookings.filter(b => b.status === 'confirmed' || b.status === 'in_progress').length,
+        completed: allBookings.filter(b => b.status === 'completed').length
+      };
+
+      document.getElementById('stats-grid').innerHTML = `
+        <div class="stat-card">
+          <div class="stat-number">${stats.total}</div>
+          <div class="stat-label">Total</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">${stats.pending}</div>
+          <div class="stat-label">Pending</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">${stats.completed}</div>
+          <div class="stat-label">Completed</div>
+        </div>
+      `;
+    }
+
+    // Filter tabs
+    function bindEvents() {
+      document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          currentFilter = tab.dataset.filter;
+          renderBookings();
+        });
+      });
+    }
+
+    // Render bookings
+    function renderBookings() {
+      const container = document.getElementById('clients-list');
+      
+      let filteredBookings = allBookings;
+      if (currentFilter === 'confirmed') {
+        filteredBookings = allBookings.filter(b => 
+          b.status === 'confirmed' || b.status === 'in_progress'
+        );
+      } else if (currentFilter !== 'all') {
+        filteredBookings = allBookings.filter(b => b.status === currentFilter);
+      }
+
+      if (filteredBookings.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <i class="fas fa-users"></i>
+            <p>No ${currentFilter === 'all' ? '' : currentFilter} client bookings found</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filteredBookings.map(booking => `
+        <div class="client-card">
+          <div class="client-header">
+            <div class="client-info">
+              <div class="client-name">${escapeHtml(booking.clientName || 'Client')}</div>
+              <div class="client-service">${escapeHtml(booking.service)}</div>
+            </div>
+            <span class="status-badge status-${booking.status}">${formatStatus(booking.status)}</span>
+          </div>
+          
+          <div class="booking-details">
+            <div><i class="fas fa-calendar"></i> ${formatDate(booking.service_date)}</div>
+            <div><i class="fas fa-clock"></i> ${booking.service_time}</div>
+            <div><i class="fas fa-map-marker-alt"></i> ${escapeHtml(booking.location)}</div>
+            <div><i class="fas fa-money-bill"></i> ₦${booking.amount.toLocaleString()}</div>
+            ${booking.reference ? `<div><i class="fas fa-receipt"></i> ${booking.reference}</div>` : ''}
+          </div>
+
+          <div class="client-actions">
+            ${renderActionButtons(booking)}
+          </div>
+        </div>
+      `).join('');
+
+      // Bind action button events
+      bindActionButtons();
+    }
+
+    function renderActionButtons(booking) {
+      switch (booking.status) {
+        case 'pending':
+          return `
+            <button class="btn btn-primary accept-btn" data-id="${booking._id}">
+              <i class="fas fa-check"></i> Accept
+            </button>
+            <button class="btn btn-danger decline-btn" data-id="${booking._id}">
+              <i class="fas fa-times"></i> Decline
+            </button>
+          `;
+        
+        case 'confirmed':
+          return `
+            <button class="btn btn-primary start-btn" data-id="${booking._id}">
+              <i class="fas fa-play"></i> Start Job
+            </button>
+            <button class="btn btn-secondary view-btn" data-id="${booking._id}">
+              View Details
+            </button>
+          `;
+        
+        case 'in_progress':
+          return `
+            <button class="btn btn-primary complete-btn" data-id="${booking._id}">
+              <i class="fas fa-check-circle"></i> Mark Complete
+            </button>
+            <button class="btn btn-secondary view-btn" data-id="${booking._id}">
+              View Details
+            </button>
+          `;
+        
+        case 'pending_confirmation':
+          return `
+            <button class="btn btn-secondary view-btn" data-id="${booking._id}">
+              <i class="fas fa-clock"></i> Awaiting Client Confirmation
+            </button>
+          `;
+        
+        default:
+          return `
+            <button class="btn btn-secondary view-btn" data-id="${booking._id}">
+              View Details
+            </button>
+          `;
+      }
+    }
+
+    function bindActionButtons() {
+      // Accept booking
+      document.querySelectorAll('.accept-btn').forEach(btn => {
+        btn.addEventListener('click', () => updateBookingStatus(btn.dataset.id, 'confirmed'));
+      });
+
+      // Decline booking
+      document.querySelectorAll('.decline-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (confirm('Decline this booking?')) {
+            updateBookingStatus(btn.dataset.id, 'declined');
+          }
+        });
+      });
+
+      // Start job
+      document.querySelectorAll('.start-btn').forEach(btn => {
+        btn.addEventListener('click', () => updateBookingStatus(btn.dataset.id, 'in_progress'));
+      });
+
+      // Mark complete
+      document.querySelectorAll('.complete-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (confirm('Mark this job as completed?')) {
+            updateBookingStatus(btn.dataset.id, 'pending_confirmation');
+          }
+        });
+      });
+
+      // View details
+      document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          window.location.href = `booking-details.html?id=${btn.dataset.id}`;
+        });
+      });
+    }
+
+    async function updateBookingStatus(bookingId, newStatus) {
+      try {
+        await API.updateBookingStatus(bookingId, newStatus);
+        showToast('Booking status updated', 'success');
+        await loadClientBookings();
+      } catch (error) {
+        console.error('Error updating booking:', error);
+        showToast('Failed to update booking', 'error');
+      }
+    }
+
+    // Utilities
+    function formatStatus(status) {
+      const statusMap = {
+        'pending': 'PENDING',
+        'confirmed': 'CONFIRMED',
+        'in_progress': 'IN PROGRESS',
+        'completed': 'COMPLETED',
+        'pending_confirmation': 'AWAITING CONFIRMATION',
+        'declined': 'DECLINED'
+      };
+      return statusMap[status] || status.toUpperCase();
+    }
+
+    function formatDate(dateString) {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--card);
+        padding: 16px 24px;
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        z-index: 2000;
+      `;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    function showError(message) {
+      document.getElementById('clients-list').innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-exclamation-circle"></i>
+          <p>${message}</p>
+          <button onclick="location.reload()" class="btn btn-primary" style="margin-top: 16px;">Retry</button>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

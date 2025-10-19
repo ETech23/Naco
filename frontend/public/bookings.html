@@ -4,26 +4,561 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Bookings - Naco</title>
-  <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --golden: #c9b037;
+      --green: #0f7a4a;
+      --green-light: #10955a;
+      --bg: #000000;
+      --card: #1a1a1a;
+      --text: #ffffff;
+      --muted: #888888;
+      --border: #333333;
+      --radius: 16px;
+      --radius-sm: 8px;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
+    }
+
+    body.light {
+      --bg: #f8faf9;
+      --card: #ffffff;
+      --text: #000000;
+      --muted: #666666;
+      --border: #e2e8f0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .bookings-page {
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    .bookings-header {
+      position: sticky;
+      top: 0;
+      background: var(--card);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: var(--shadow);
+      z-index: 100;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .back-button {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: var(--text);
+      cursor: pointer;
+      padding: 8px;
+    }
+
+    .bookings-header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    .bookings-content {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .filter-tab {
+      padding: 8px 16px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+
+    .filter-tab.active {
+      background: var(--green);
+      color: white;
+      border-color: var(--green);
+    }
+
+    .booking-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+      border-left: 4px solid var(--green);
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .booking-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .booking-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 12px;
+    }
+
+    .booking-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-confirmed { background: #dbeafe; color: #1e40af; }
+    .status-in_progress { background: #e0e7ff; color: #3730a3; }
+    .status-completed { background: #d1fae5; color: #065f46; }
+    .status-pending_confirmation { background: #fce7f3; color: #831843; }
+    .status-cancelled { background: #fee2e2; color: #991b1b; }
+    .status-declined { background: #fee2e2; color: #991b1b; }
+
+    .booking-details {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .booking-details div {
+      margin-bottom: 6px;
+    }
+
+    .booking-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--green);
+      color: white;
+    }
+
+    .btn-secondary {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    .btn-danger {
+      background: #dc2626;
+      color: white;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .empty-state i {
+      font-size: 64px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .empty-state p {
+      color: var(--muted);
+    }
+  </style>
 </head>
 <body>
-  <div id="app-header"></div>
-  
-  <main class="bookings-page">
-    <div class="page-title">
+  <div class="bookings-page">
+    <header class="bookings-header">
+      <button id="back-btn" class="back-button">
+        <i class="fas fa-arrow-left"></i>
+      </button>
       <h1>My Bookings</h1>
-      <p class="muted">Track your service requests</p>
-    </div>
-    
-    <div class="bookings-container">
-      <!-- Bookings will be loaded here -->
-    </div>
-  </main>
+    </header>
 
-  <script type="module" src="./api.js"></script>
-  <script type="module" src="./utils.js"></script>
-  <script type="module" src="./shared-header.js"></script>
-  <script type="module" src="./bookings.js"></script>
+    <div class="bookings-content">
+      <div class="filter-tabs">
+        <button class="filter-tab active" data-filter="all">All</button>
+        <button class="filter-tab" data-filter="pending">Pending</button>
+        <button class="filter-tab" data-filter="confirmed">Confirmed</button>
+        <button class="filter-tab" data-filter="in_progress">In Progress</button>
+        <button class="filter-tab" data-filter="completed">Completed</button>
+        <button class="filter-tab" data-filter="cancelled">Cancelled</button>
+      </div>
+
+      <div id="bookings-list"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as API from './js/api.js';
+
+    let allBookings = [];
+    let currentFilter = 'all';
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Fix user data if needed (one-time migration)
+      fixUserData();
+      
+      await loadBookings();
+      bindEvents();
+      
+      // Apply theme
+      const theme = localStorage.getItem('theme') || 'dark';
+      document.body.classList.toggle('light', theme === 'light');
+    });
+
+    // Fix existing user data to have id property
+    function fixUserData() {
+      const userData = localStorage.getItem('userData');
+      if (userData) {
+        try {
+          const user = JSON.parse(userData);
+          if (!user.id && user._id) {
+            const normalizedUser = { ...user, id: user._id };
+            localStorage.setItem('userData', JSON.stringify(normalizedUser));
+            console.log('✅ User data normalized');
+          }
+        } catch (e) {
+          console.error('Failed to normalize user data:', e);
+        }
+      }
+    }
+
+    // Back button
+    document.getElementById('back-btn').addEventListener('click', () => {
+      window.history.back();
+    });
+
+    // Filter tabs
+    function bindEvents() {
+      document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          currentFilter = tab.dataset.filter;
+          renderBookings();
+        });
+      });
+    }
+
+    // Load bookings
+    async function loadBookings() {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        window.location.href = 'auth.html';
+        return;
+      }
+
+      try {
+        allBookings = await API.getUserBookings();
+        console.log('📦 Total bookings loaded:', allBookings.length);
+        console.log('📦 Raw bookings:', allBookings);
+        
+        // Get current user
+        const userData = localStorage.getItem('userData');
+        if (!userData) {
+          window.location.href = 'auth.html';
+          return;
+        }
+        
+        const user = JSON.parse(userData);
+        const currentUserId = (user.id || user._id).toString();
+        
+        console.log('👤 Current user ID:', currentUserId);
+        console.log('👤 Current user role:', user.role);
+        
+        // CRITICAL FIX: Filter bookings based on role with proper ID normalization
+        if (user.role === 'artisan') {
+          // For artisans: show bookings where they provide service
+          allBookings = allBookings.filter(booking => {
+            const artisanId = booking.bookedArtisanId || booking.artisanId || booking.artisan;
+            const normalizedArtisanId = typeof artisanId === 'object' 
+              ? (artisanId._id || artisanId.id) 
+              : artisanId;
+            const artisanIdStr = (normalizedArtisanId || '').toString();
+            
+            console.log('🔍 Checking booking:', booking._id || booking.id, 
+                       'Artisan ID:', artisanIdStr, 
+                       'Match:', artisanIdStr === currentUserId);
+            
+            return artisanIdStr === currentUserId;
+          });
+          console.log('✅ Showing artisan bookings:', allBookings.length);
+        } else {
+          // For clients: show bookings where they requested service
+          allBookings = allBookings.filter(booking => {
+            const clientId = booking.bookerUserId || booking.clientId || booking.client;
+            const normalizedClientId = typeof clientId === 'object' 
+              ? (clientId._id || clientId.id) 
+              : clientId;
+            const clientIdStr = (normalizedClientId || '').toString();
+            
+            console.log('🔍 Checking booking:', booking._id || booking.id, 
+                       'Client ID:', clientIdStr, 
+                       'Match:', clientIdStr === currentUserId);
+            
+            return clientIdStr === currentUserId;
+          });
+          console.log('✅ Showing client bookings:', allBookings.length);
+        }
+        
+        renderBookings();
+      } catch (error) {
+        console.error('❌ Error loading bookings:', error);
+        showError('Failed to load bookings');
+      }
+    }
+
+    // Render bookings
+    function renderBookings() {
+      const container = document.getElementById('bookings-list');
+      
+      let filteredBookings = allBookings;
+      if (currentFilter !== 'all') {
+        filteredBookings = allBookings.filter(b => b.status === currentFilter);
+      }
+
+      if (filteredBookings.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <i class="fas fa-calendar-times"></i>
+            <p>No ${currentFilter === 'all' ? '' : currentFilter} bookings found</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filteredBookings.map(booking => {
+        // CRITICAL FIX: Normalize booking ID
+        const bookingId = (booking._id || booking.id || '').toString();
+        
+        console.log('🎨 Rendering booking:', bookingId);
+        
+        // Get display names with proper fallbacks
+        const artisanName = booking.artisanName || 
+                           (typeof booking.artisan === 'object' ? booking.artisan?.name : null) ||
+                           'Artisan';
+        
+        const clientName = booking.clientName || 
+                          (typeof booking.client === 'object' ? booking.client?.name : null) ||
+                          'Client';
+        
+        return `
+          <div class="booking-card" data-booking-id="${bookingId}">
+            <div class="booking-header">
+              <div>
+                <div class="booking-title">${escapeHtml(booking.service || 'Service')}</div>
+                <div style="font-size: 14px; color: var(--muted);">
+                  with ${escapeHtml(artisanName)}
+                </div>
+              </div>
+              <span class="status-badge status-${booking.status}">${formatStatus(booking.status)}</span>
+            </div>
+            
+            <div class="booking-details">
+              <div><i class="fas fa-calendar"></i> ${formatDate(booking.service_date)}</div>
+              <div><i class="fas fa-clock"></i> ${booking.service_time || 'N/A'}</div>
+              <div><i class="fas fa-map-marker-alt"></i> ${escapeHtml(booking.location || 'Location TBD')}</div>
+              <div><i class="fas fa-money-bill"></i> ₦${(booking.amount || 0).toLocaleString()}</div>
+              ${booking.reference ? `<div><i class="fas fa-receipt"></i> ${booking.reference}</div>` : ''}
+            </div>
+
+            <div class="booking-actions" onclick="event.stopPropagation()">
+              ${renderActionButtons(booking)}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      bindBookingEvents();
+    }
+
+    function renderActionButtons(booking) {
+      const userData = localStorage.getItem('userData');
+      const user = JSON.parse(userData);
+      const status = booking.status;
+
+      if (user.role === 'artisan') {
+        // Artisan view
+        if (status === 'pending_confirmation') {
+          return '<p style="font-size: 12px; color: var(--muted); margin: 0;">Awaiting client confirmation</p>';
+        }
+      } else {
+        // Client view
+        if (status === 'pending') {
+          const bookingId = (booking._id || booking.id || '').toString();
+          return `<button class="btn btn-danger cancel-btn" data-booking-id="${bookingId}"><i class="fas fa-times"></i> Cancel</button>`;
+        }
+        if (status === 'pending_confirmation') {
+          const bookingId = (booking._id || booking.id || '').toString();
+          return `<button class="btn btn-primary confirm-btn" data-booking-id="${bookingId}"><i class="fas fa-check"></i> Confirm Completion</button>`;
+        }
+      }
+      
+      return '';
+    }
+
+    function bindBookingEvents() {
+      // CRITICAL FIX: Improved event binding with proper ID handling
+      document.querySelectorAll('.booking-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+          // Don't navigate if clicking action buttons
+          if (!e.target.closest('.booking-actions')) {
+            const bookingId = card.dataset.bookingId;
+            
+            console.log('🔗 Opening booking details for ID:', bookingId);
+            
+            if (!bookingId || bookingId === 'undefined' || bookingId === 'null') {
+              console.error('❌ Invalid booking ID:', bookingId);
+              showToast('Invalid booking ID', 'error');
+              return;
+            }
+            
+            // Navigate to details page
+            window.location.href = `booking-details.html?id=${encodeURIComponent(bookingId)}`;
+          }
+        });
+      });
+
+      document.querySelectorAll('.cancel-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const bookingId = btn.dataset.bookingId;
+          
+          if (confirm('Cancel this booking?')) {
+            try {
+              console.log('🚫 Cancelling booking:', bookingId);
+              await API.updateBookingStatus(bookingId, 'cancelled');
+              showToast('Booking cancelled', 'success');
+              await loadBookings();
+            } catch (error) {
+              console.error('❌ Error:', error);
+              showToast('Failed to cancel', 'error');
+            }
+          }
+        });
+      });
+
+      document.querySelectorAll('.confirm-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const bookingId = btn.dataset.bookingId;
+          
+          if (confirm('Confirm completion?')) {
+            try {
+              console.log('✅ Confirming booking:', bookingId);
+              await API.updateBookingStatus(bookingId, 'confirm_completion');
+              showToast('Confirmed', 'success');
+              await loadBookings();
+            } catch (error) {
+              console.error('❌ Error:', error);
+              showToast('Failed to confirm', 'error');
+            }
+          }
+        });
+      });
+    }
+
+    function formatStatus(status) {
+      const statusMap = {
+        'pending': 'PENDING',
+        'confirmed': 'CONFIRMED',
+        'in_progress': 'IN PROGRESS',
+        'completed': 'COMPLETED',
+        'pending_confirmation': 'AWAITING CONFIRMATION',
+        'declined': 'DECLINED',
+        'cancelled': 'CANCELLED'
+      };
+      return statusMap[status] || (status || 'UNKNOWN').toUpperCase();
+    }
+
+    function formatDate(dateString) {
+      if (!dateString) return 'Date TBD';
+      try {
+        return new Date(dateString).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+      } catch (e) {
+        return 'Invalid Date';
+      }
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.textContent = message;
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--card);
+        padding: 16px 24px;
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        z-index: 2000;
+        border-left: 4px solid ${type === 'success' ? 'var(--green)' : '#dc2626'};
+      `;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    function showError(message) {
+      document.getElementById('bookings-list').innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-exclamation-circle"></i>
+          <p>${message}</p>
+          <button onclick="location.reload()" class="btn btn-primary" style="margin-top: 16px;">Retry</button>
+        </div>
+      `;
+    }
+  </script>
 </body>
 </html>

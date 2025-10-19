@@ -1,26 +1,40 @@
 /* Modern CSS Variables */
 :root {
-  /* Dark Mode as default */
+  /* Dark Mode as default - Normal Black Theme */
   --golden: #c9b037;
   --green: #0f7a4a;
   --green-light: #10955a;
   --green-dark: #0d5a38;
   --accent: linear-gradient(135deg, #0f7a4a 0%, #c9b037 100%);
-  --bg: #0f172a;
-  --card: #1e293b;
-  --text: #f8fafc;
-  --muted: #94a3b8;
-  --border: #334155;
-  --border-light: #475569;
+  --bg: #000000; /* Pure black background */
+  --card: #1a1a1a; /* Dark gray for cards */
+  --text: #ffffff; /* Pure white text */
+  --muted: #888888; /* Medium gray for muted text */
+  --border: #333333; /* Dark gray borders */
+  --border-light: #444444; /* Slightly lighter borders */
   --radius: 16px;
   --radius-sm: 8px;
   --radius-lg: 24px;
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3),
+            0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.3),
+               0 8px 10px -6px rgb(0 0 0 / 0.3);
+  --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Light Mode Variables */
+body.light {
+  --bg: #f8faf9;
+  --card: #ffffff;
+  --text: #000000; /* Black text for light mode */
+  --muted: #666666; /* Dark gray for muted text */
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
   --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1),
             0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1),
                0 8px 10px -6px rgb(0 0 0 / 0.1);
-  --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Completely hide scrollbars across all browsers while maintaining scroll functionality */
@@ -52,15 +66,6 @@ body {
   overflow: auto;
   -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
-/* Light Mode Variables */
-body.light {
-  --bg: #f8faf9;
-  --card: #ffffff;
-  --text: #0f172a;
-  --muted: #64748b;
-  --border: #e2e8f0;
-  --border-light: #f1f5f9;
-}
 
 /* Reset and Base */
 *, *::before, *::after {
@@ -69,6 +74,7 @@ body.light {
   padding: 0;
 }
 
+/* HTML and Body Setup */
 html, body, #app {
   height: 100%;
 }
@@ -80,12 +86,32 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: var(--transition);
+  transition: var(--transition-slow);
 }
 
 body, html {
   margin: 0;
   padding: 0;
+}
+
+/* Utility Classes */
+.card {
+  background-color: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+
+.text-muted {
+  color: var(--muted);
+}
+
+.border {
+  border: 1px solid var(--border);
+}
+
+.border-light {
+  border: 1px solid var(--border-light);
 }
 
 

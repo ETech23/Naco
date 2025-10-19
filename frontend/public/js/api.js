@@ -102,7 +102,7 @@ export const api = new ApiClient(API_URL);
     throw new Error(error.message || 'Registration failed. Please try again.');
   }
 }**/
-export async function registerUser(userData) {
+/** export async function registerUser(userData) {
   try {
     if (!userData.email || !userData.password || !userData.name || !userData.location) {
       throw new Error('Please fill in all required fields');
@@ -139,20 +139,7 @@ export async function registerUser(userData) {
   }
 }
 
-/** export async function loginUser(email, password) {
-  try {
-    const response = await api.request('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password })
-    });
 
-    api.setAuthToken(response.token);
-    return response.user;
-  } catch (error) {
-    console.error('Login failed:', error);
-    throw new Error(error.message || 'Login failed. Please check your credentials.');
-  }
-}**/
 export async function loginUser(email, password) {
   try {
     const response = await api.request('/auth/login', {
@@ -184,7 +171,147 @@ export async function loginUser(email, password) {
     console.error('Login failed:', error);
     throw new Error(error.message || 'Login failed. Please check your credentials.');
   }
+}**/
+
+export async function registerUser(userData) {
+  try {
+    if (!userData.email || !userData.password || !userData.name || !userData.location) {
+      throw new Error('Please fill in all required fields');
+    }
+
+    const response = await api.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData)
+    });
+
+    console.log('🔍 Full Register response:', response);
+    console.log('🔍 Response type:', typeof response);
+    console.log('🔍 Response keys:', Object.keys(response));
+
+    // Extract the actual user object from response with better detection
+    let user, token;
+
+    // Check various possible response structures
+    if (response.data) {
+      // Nested structure: { data: { user: {...}, token: "..." } }
+      user = response.data.user;
+      token = response.data.token;
+    } else if (response.user && response.token) {
+      // Flat structure: { user: {...}, token: "..." }
+      user = response.user;
+      token = response.token;
+    } else if (response.token && response._id) {
+      // User is merged with token: { token: "...", _id: "...", name: "..." }
+      token = response.token;
+      user = { ...response };
+      delete user.token; // Remove token from user object
+    } else {
+      console.error('❌ Unexpected response structure:', response);
+      throw new Error('Invalid response structure from server');
+    }
+
+    console.log('✅ Extracted user:', user);
+    console.log('✅ Extracted token:', token);
+
+    if (!token) {
+      throw new Error('No token received from server');
+    }
+
+    if (!user || !user._id) {
+      console.error('❌ Invalid user object:', user);
+      throw new Error('Invalid user data received from server');
+    }
+
+    // Save token
+    api.setAuthToken(token);
+    
+    // CRITICAL FIX: Normalize user object to have both _id and id
+    const normalizedUser = {
+      ...user,
+      id: user._id,  // MongoDB uses _id, normalize to id
+      _id: user._id  // Keep _id for compatibility
+    };
+    
+    localStorage.setItem('userData', JSON.stringify(normalizedUser));
+    
+    console.log('💾 Normalized user saved:', normalizedUser);
+    console.log('🔑 Token saved');
+
+    return normalizedUser;
+  } catch (error) {
+    console.error('❌ Registration failed:', error);
+    throw new Error(error.message || 'Registration failed. Please try again.');
+  }
 }
+
+export async function loginUser(email, password) {
+  try {
+    const response = await api.request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password })
+    });
+
+    console.log('🔍 Full Login response:', response);
+    console.log('🔍 Response type:', typeof response);
+    console.log('🔍 Response keys:', Object.keys(response));
+
+    // Extract the actual user object from response with better detection
+    let user, token;
+
+    // Check various possible response structures
+    if (response.data) {
+      // Nested structure: { data: { user: {...}, token: "..." } }
+      user = response.data.user;
+      token = response.data.token;
+    } else if (response.user && response.token) {
+      // Flat structure: { user: {...}, token: "..." }
+      user = response.user;
+      token = response.token;
+    } else if (response.token && response._id) {
+      // User is merged with token: { token: "...", _id: "...", name: "..." }
+      token = response.token;
+      user = { ...response };
+      delete user.token; // Remove token from user object
+    } else {
+      console.error('❌ Unexpected response structure:', response);
+      throw new Error('Invalid response structure from server');
+    }
+
+    console.log('✅ Extracted user:', user);
+    console.log('✅ Extracted token:', token);
+
+    if (!token) {
+      throw new Error('No token received from server');
+    }
+
+    if (!user || !user._id) {
+      console.error('❌ Invalid user object:', user);
+      throw new Error('Invalid user data received from server');
+    }
+
+    // Save token
+    api.setAuthToken(token);
+    
+    // CRITICAL FIX: Normalize user object to have both _id and id
+    const normalizedUser = {
+      ...user,
+      id: user._id,  // MongoDB uses _id, normalize to id
+      _id: user._id  // Keep _id for compatibility
+    };
+    
+    localStorage.setItem('userData', JSON.stringify(normalizedUser));
+    
+    console.log('💾 Normalized user saved:', normalizedUser);
+    console.log('🔑 Token saved');
+
+    return normalizedUser;
+  } catch (error) {
+    console.error('❌ Login failed:', error);
+    throw new Error(error.message || 'Login failed. Please check your credentials.');
+  }
+}
+
+
 
 /** export function logout() {
   api.setAuthToken(null);
@@ -385,6 +512,26 @@ export async function getUserBookings(userId = null) {
     console.error('Failed to get bookings:', error);
     return [];
   }
+}
+
+// Booking Details Function
+export async function getBookingDetails(bookingId) {
+  try {
+    if (!api.isAuthenticated()) {
+      throw new Error('Authentication required');
+    }
+
+    const booking = await api.request(`/bookings/${bookingId}`);
+    return booking;
+  } catch (error) {
+    console.error('Failed to get booking details:', error);
+    throw error;
+  }
+}
+
+// Get base URL for frontend use
+export function getBaseUrl() {
+  return API_URL;
 }
 
     export async function updateBookingStatus(bookingId, action) {
