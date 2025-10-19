@@ -1,9 +1,8 @@
-// api.js - Frontend API Client (replaces pocketbase.js)
 
 // Detect environment and use appropriate API URL
 const API_URL = window.location.hostname === 'localhost' 
   ? 'http://localhost:8091'  // Local development
-  : 'https://your-production-domain.com';  // Update with your production URL
+  : 'https://naco-backend-r0hn.onrender.com';  // Update with your production URL
 
 class ApiClient {
   constructor(baseURL) {

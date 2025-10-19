@@ -30,7 +30,6 @@ USER nodejs
 # Start the application
 CMD ["npm", "start"]
 
----
 
 # docker-compose.yml
 version: '3.8'
@@ -61,7 +60,6 @@ services:
 volumes:
   mongo_data:
 
----
 
 # docker-compose.dev.yml (for development)
 version: '3.8'
@@ -95,7 +93,6 @@ services:
 volumes:
   mongo_data:
 
----
 
 # Docker Commands:
 
