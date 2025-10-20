@@ -1093,7 +1093,7 @@ renderSearchResultCard(artisan) {
      <img 
   src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
   alt="${this.escapeHtml(artisan.name)}"
-  loading="lazy"
+ 
   onerror="this.src='../assets/avatar-placeholder.png'"
   width="100" height="100"
 />
@@ -2779,7 +2779,7 @@ async performLogoutCleanup() {
           <img 
   src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
   alt="${this.escapeHtml(artisan.name)}"
-  loading="lazy"
+  
   onerror="this.src='../assets/avatar-placeholder.png'"
   width="100" height="100"
 />
@@ -2943,7 +2943,7 @@ async performLogoutCleanup() {
         <img 
   src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
   alt="${this.escapeHtml(artisan.name)}"
-  loading="lazy"
+  
   onerror="this.src='../assets/avatar-placeholder.png'"
   width="100" height="100"
 />
@@ -3355,7 +3355,7 @@ async performLogoutCleanup() {
               <img 
   src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
   alt="${this.escapeHtml(artisan.name)}"
-  loading="lazy"
+  
   onerror="this.src='../assets/avatar-placeholder.png'"
   width="100" height="100"
 />
@@ -5106,7 +5106,7 @@ openBookingDetailsOverlay(bookingId) {
             <img 
   src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
   alt="${this.escapeHtml(artisan.name)}"
-  loading="lazy"
+  
   onerror="this.src='../assets/avatar-placeholder.png'"
   width="100" height="100"
 />
@@ -5323,7 +5323,7 @@ openBookingDetailsOverlay(bookingId) {
               <img 
   src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
   alt="${this.escapeHtml(artisan.name)}"
-  loading="lazy"
+  
   onerror="this.src='../assets/avatar-placeholder.png'"
   width="100" height="100"
 />
@@ -5945,7 +5945,7 @@ isModalOpen(type) {
     <img 
   src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
   alt="${this.escapeHtml(artisan.name)}"
-  loading="lazy"
+  
   onerror="this.src='../assets/avatar-placeholder.png'"
   width="100" height="100"
 />
@@ -6001,7 +6001,7 @@ isModalOpen(type) {
     <div class="artisan-card-header">
       <img src="${artisan.photo || '../assets/avatar-placeholder.png'}" 
            alt="${this.escapeHtml(artisan.name)}"
-           loading="lazy">
+           >
       <div class="artisan-info">
         <div class="artisan-title">
           <strong>
@@ -6616,7 +6616,7 @@ generateProfileMarkup(user, stats, avatarUrl) {
           alt="Profile avatar for ${this.escapeHtml(user.name || 'User')}" 
           class="profile-avatar-large"
           onerror="this.src='../assets/avatar-placeholder.png'"
-          loading="lazy"
+          
         >
         ${user.premium ? '<div class="premium-indicator"><i class="fas fa-crown"></i></div>' : ''}
       </div>

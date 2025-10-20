@@ -1056,15 +1056,15 @@
       document.getElementById('profile-menu').innerHTML = menuHtml;
     }
 
-    /**renderActions() {
+    renderActions() {
       const actionsHtml = `
-        <button id="logout-btn" class="btn-danger">
+        <button id="logout-btn" class="btn-danger" style="display: none">
           <i class="fas fa-sign-out-alt"></i> Logout
         </button>
       `;
 
       document.getElementById('profile-actions').innerHTML = actionsHtml;
-    }**/
+    }
 
     bindEvents() {
       // Back button
