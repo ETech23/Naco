@@ -193,13 +193,22 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-const storage = new CloudinaryStorage({
+/** const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'naco_uploads', // will show as a folder in your Cloudinary media library
     allowed_formats: ['jpg', 'jpeg', 'png'],
     public_id: (req, file) =>
       file.fieldname + '-' + Date.now() + path.extname(file.originalname),
+  },
+});**/
+
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'naco_uploads',
+    allowed_formats: ['jpg', 'jpeg', 'png'],
+    public_id: (req, file) => file.fieldname + '-' + Date.now(), // remove extname
   },
 });
 

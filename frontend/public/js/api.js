@@ -1,4 +1,3 @@
-
 // Detect environment and use appropriate API URL
 const API_URL = window.location.hostname === 'localhost' 
   ? 'http://localhost:8091'  // Local development
@@ -12,48 +11,48 @@ class ApiClient {
 
   // Helper method for making requests
   async request(endpoint, options = {}) {
-  const url = `${this.baseURL}${endpoint}`;
-  const headers = { ...options.headers };
+    const url = `${this.baseURL}${endpoint}`;
+    const headers = { ...options.headers };
 
-  // Only set JSON Content-Type if body is not FormData
-  if (!(options.body instanceof FormData)) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  const config = {
-    ...options,
-    headers
-  };
-
-  // Add auth token if available
-  if (this.token) {
-    config.headers.Authorization = `Bearer ${this.token}`;
-  }
-
-  try {
-    // Check if online
-    if (!navigator.onLine) {
-      throw new Error('You are currently offline. Please check your internet connection.');
+    // Only set JSON Content-Type if body is not FormData
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
     }
 
-    const response = await fetch(url, config);
+    const config = {
+      ...options,
+      headers
+    };
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+    // Add auth token if available
+    if (this.token) {
+      config.headers.Authorization = `Bearer ${this.token}`;
     }
 
-    return await response.json();
-  } catch (error) {
-    console.error('API request failed:', endpoint, error);
+    try {
+      // Check if online
+      if (!navigator.onLine) {
+        throw new Error('You are currently offline. Please check your internet connection.');
+      }
 
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('Unable to connect to server. Please check your internet connection.');
+      const response = await fetch(url, config);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('API request failed:', endpoint, error);
+
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Unable to connect to server. Please check your internet connection.');
+      }
+
+      throw error;
     }
-
-    throw error;
   }
-}
 
   // Set auth token
   setAuthToken(token) {
@@ -79,99 +78,58 @@ class ApiClient {
 // Create API client instance
 export const api = new ApiClient(API_URL);
 
-// Authentication Functions
-/** export async function registerUser(userData) {
-  try {
-    // Validate required fields
-    if (!userData.email || !userData.password || !userData.name || !userData.location) {
-      throw new Error('Please fill in all required fields');
-    }
+// HELPER: Normalize user object to always have both id and _id
+function normalizeUserObject(response) {
+  console.log('🔍 Raw response:', response);
+  
+  let user, token;
 
-    const response = await api.request('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(userData)
-    });
-
-    // Set auth token
-    api.setAuthToken(response.token);
-
-    return response.user;
-  } catch (error) {
-    console.error('Registration failed:', error);
-    throw new Error(error.message || 'Registration failed. Please try again.');
+  // Structure 1: Nested { data: { user: {...}, token: "..." } }
+  if (response.data?.user && response.data?.token) {
+    user = response.data.user;
+    token = response.data.token;
   }
-}**/
-/** export async function registerUser(userData) {
-  try {
-    if (!userData.email || !userData.password || !userData.name || !userData.location) {
-      throw new Error('Please fill in all required fields');
-    }
-
-    const response = await api.request('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(userData)
-    });
-
-    console.log('Register response:', response); // Debug log
-
-    // FIX: Extract the actual user object from response
-    const user = response.user || response.data?.user || response;
-    const token = response.token || response.data?.token;
-
-    if (!token) {
-      throw new Error('No token received from server');
-    }
-
-    // Save token
-    api.setAuthToken(token);
-    
-    // CRITICAL: Save the actual user object, not the response wrapper
-    localStorage.setItem('userData', JSON.stringify(user));
-    
-    console.log('User saved:', user); // Debug log
-    console.log('Token saved:', token); // Debug log
-
-    return user;
-  } catch (error) {
-    console.error('Registration failed:', error);
-    throw new Error(error.message || 'Registration failed. Please try again.');
+  // Structure 2: Flat { user: {...}, token: "..." }
+  else if (response.user && response.token) {
+    user = response.user;
+    token = response.token;
   }
+  // Structure 3: Merged { token: "...", _id: "...", name: "...", ... }
+  else if (response.token && (response._id || response.id)) {
+    token = response.token;
+    user = { ...response };
+    delete user.token; // Remove token from user object
+  }
+  // Structure 4: Just user object (from profile updates)
+  else if (response._id || response.id) {
+    user = response;
+    token = null; // No new token
+  }
+  else {
+    console.error('❌ Unexpected response structure:', response);
+    throw new Error('Invalid response structure from server');
+  }
+
+  // Validate user object
+  if (!user || (!user._id && !user.id)) {
+    console.error('❌ Invalid user object:', user);
+    throw new Error('Invalid user data received from server');
+  }
+
+  // NORMALIZE: Ensure both _id and id exist
+  const normalizedUser = {
+    ...user,
+    id: user.id || user._id?.toString() || user._id,
+    _id: user._id || user.id
+  };
+
+  console.log('✅ Normalized user:', normalizedUser);
+  if (token) console.log('✅ Token extracted');
+
+  return { user: normalizedUser, token };
 }
 
-
-export async function loginUser(email, password) {
-  try {
-    const response = await api.request('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password })
-    });
-
-    console.log('Login response:', response); // Debug log
-
-    // FIX: Extract the actual user object from response
-    const user = response.user || response.data?.user || response;
-    const token = response.token || response.data?.token;
-
-    if (!token) {
-      throw new Error('No token received from server');
-    }
-
-    // Save token
-    api.setAuthToken(token);
-    
-    // CRITICAL: Save the actual user object, not the response wrapper
-    localStorage.setItem('userData', JSON.stringify(user));
-    
-    console.log('User saved:', user); // Debug log
-    console.log('Token saved:', token); // Debug log
-
-    return user;
-  } catch (error) {
-    console.error('Login failed:', error);
-    throw new Error(error.message || 'Login failed. Please check your credentials.');
-  }
-}**/
-
+// Authentication Functions
 export async function registerUser(userData) {
   try {
     if (!userData.email || !userData.password || !userData.name || !userData.location) {
@@ -183,60 +141,16 @@ export async function registerUser(userData) {
       body: JSON.stringify(userData)
     });
 
-    console.log('🔍 Full Register response:', response);
-    console.log('🔍 Response type:', typeof response);
-    console.log('🔍 Response keys:', Object.keys(response));
+    const { user, token } = normalizeUserObject(response);
 
-    // Extract the actual user object from response with better detection
-    let user, token;
-
-    // Check various possible response structures
-    if (response.data) {
-      // Nested structure: { data: { user: {...}, token: "..." } }
-      user = response.data.user;
-      token = response.data.token;
-    } else if (response.user && response.token) {
-      // Flat structure: { user: {...}, token: "..." }
-      user = response.user;
-      token = response.token;
-    } else if (response.token && response._id) {
-      // User is merged with token: { token: "...", _id: "...", name: "..." }
-      token = response.token;
-      user = { ...response };
-      delete user.token; // Remove token from user object
-    } else {
-      console.error('❌ Unexpected response structure:', response);
-      throw new Error('Invalid response structure from server');
+    if (token) {
+      api.setAuthToken(token);
     }
-
-    console.log('✅ Extracted user:', user);
-    console.log('✅ Extracted token:', token);
-
-    if (!token) {
-      throw new Error('No token received from server');
-    }
-
-    if (!user || !user._id) {
-      console.error('❌ Invalid user object:', user);
-      throw new Error('Invalid user data received from server');
-    }
-
-    // Save token
-    api.setAuthToken(token);
     
-    // CRITICAL FIX: Normalize user object to have both _id and id
-    const normalizedUser = {
-      ...user,
-      id: user._id,  // MongoDB uses _id, normalize to id
-      _id: user._id  // Keep _id for compatibility
-    };
-    
-    localStorage.setItem('userData', JSON.stringify(normalizedUser));
-    
-    console.log('💾 Normalized user saved:', normalizedUser);
-    console.log('🔑 Token saved');
+    localStorage.setItem('userData', JSON.stringify(user));
+    console.log('💾 User and token saved');
 
-    return normalizedUser;
+    return user;
   } catch (error) {
     console.error('❌ Registration failed:', error);
     throw new Error(error.message || 'Registration failed. Please try again.');
@@ -250,102 +164,42 @@ export async function loginUser(email, password) {
       body: JSON.stringify({ email, password })
     });
 
-    console.log('🔍 Full Login response:', response);
-    console.log('🔍 Response type:', typeof response);
-    console.log('🔍 Response keys:', Object.keys(response));
+    const { user, token } = normalizeUserObject(response);
 
-    // Extract the actual user object from response with better detection
-    let user, token;
-
-    // Check various possible response structures
-    if (response.data) {
-      // Nested structure: { data: { user: {...}, token: "..." } }
-      user = response.data.user;
-      token = response.data.token;
-    } else if (response.user && response.token) {
-      // Flat structure: { user: {...}, token: "..." }
-      user = response.user;
-      token = response.token;
-    } else if (response.token && response._id) {
-      // User is merged with token: { token: "...", _id: "...", name: "..." }
-      token = response.token;
-      user = { ...response };
-      delete user.token; // Remove token from user object
-    } else {
-      console.error('❌ Unexpected response structure:', response);
-      throw new Error('Invalid response structure from server');
+    if (token) {
+      api.setAuthToken(token);
     }
-
-    console.log('✅ Extracted user:', user);
-    console.log('✅ Extracted token:', token);
-
-    if (!token) {
-      throw new Error('No token received from server');
-    }
-
-    if (!user || !user._id) {
-      console.error('❌ Invalid user object:', user);
-      throw new Error('Invalid user data received from server');
-    }
-
-    // Save token
-    api.setAuthToken(token);
     
-    // CRITICAL FIX: Normalize user object to have both _id and id
-    const normalizedUser = {
-      ...user,
-      id: user._id,  // MongoDB uses _id, normalize to id
-      _id: user._id  // Keep _id for compatibility
-    };
-    
-    localStorage.setItem('userData', JSON.stringify(normalizedUser));
-    
-    console.log('💾 Normalized user saved:', normalizedUser);
-    console.log('🔑 Token saved');
+    localStorage.setItem('userData', JSON.stringify(user));
+    console.log('💾 User and token saved');
 
-    return normalizedUser;
+    return user;
   } catch (error) {
     console.error('❌ Login failed:', error);
     throw new Error(error.message || 'Login failed. Please check your credentials.');
   }
 }
 
-
-
-/** export function logout() {
-  api.setAuthToken(null);
-  return Promise.resolve(true);
-} **/
 export function logout() {
   api.setAuthToken(null);
-  localStorage.removeItem('userData'); // Add this line
+  localStorage.removeItem('userData');
   return Promise.resolve(true);
 }
 
-/** export async function getCurrentUser() {
-  try {
-    if (!api.isAuthenticated()) return null;
-    
-    const user = await api.request('/auth/user');
-    return user;
-  } catch (error) {
-    console.error('Failed to get current user:', error);
-    
-    // If unauthorized, clear invalid token
-    if (error.status === 401 || error.code === 'UNAUTHORIZED') {
-      api.setAuthToken(null);
-    }
-    
-    return null;
-  }
-} **/
 export async function getCurrentUser() {
   try {
     // First try to get from localStorage (faster, works offline)
     const cachedUser = localStorage.getItem('userData');
     if (cachedUser) {
       try {
-        return JSON.parse(cachedUser);
+        const user = JSON.parse(cachedUser);
+        // Ensure cached user is normalized
+        const normalized = {
+          ...user,
+          id: user.id || user._id,
+          _id: user._id || user.id
+        };
+        return normalized;
       } catch (e) {
         console.warn('Failed to parse cached user data');
       }
@@ -354,7 +208,8 @@ export async function getCurrentUser() {
     // If not cached or invalid, fetch from API
     if (!api.isAuthenticated()) return null;
     
-    const user = await api.request('/auth/user');
+    const response = await api.request('/auth/user');
+    const { user } = normalizeUserObject(response);
     
     // Cache the fresh user data
     localStorage.setItem('userData', JSON.stringify(user));
@@ -378,15 +233,20 @@ export function isAuthenticated() {
 }
 
 // User Profile Functions
-
-// Unified profile update (with or without image)
 export async function updateUserProfile(userId, updates) {
   try {
-    const user = await api.request(`/users/${userId}`, {
+    console.log('Updating profile with userId:', userId);
+    
+    const response = await api.request(`/users/${userId}`, {
       method: 'PUT',
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updates)
     });
+
+    const { user } = normalizeUserObject(response);
+    
+    // Update localStorage with new data
+    localStorage.setItem('userData', JSON.stringify(user));
+    
     return user;
   } catch (error) {
     console.error('Profile update failed:', error);
@@ -394,31 +254,22 @@ export async function updateUserProfile(userId, updates) {
   }
 }
 
-/**export async function updateUserProfile(userId, updates) {
-  try {
-    const user = await api.request(`/users/${userId}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates)
-    });
-    return user;
-  } catch (error) {
-    console.error('Profile update failed:', error);
-    throw error;
-  }
-}**/
-
 export async function uploadProfileImage(userId, file) {
   try {
     const formData = new FormData();
-    formData.append('photo', file); // <--- must match backend upload.single('photo')
+    formData.append('photo', file);
 
-    const updatedUser = await api.request(`/users/${userId}/avatar`, {
+    const response = await api.request(`/users/${userId}/avatar`, {
       method: 'POST',
       body: formData
-      // DO NOT set Content-Type header — the browser will set it automatically
     });
 
-    return updatedUser;
+    const { user } = normalizeUserObject(response);
+    
+    // Update localStorage with new avatar
+    localStorage.setItem('userData', JSON.stringify(user));
+
+    return user;
   } catch (error) {
     console.error('Profile image upload failed:', error);
     throw error;
@@ -427,10 +278,16 @@ export async function uploadProfileImage(userId, file) {
 
 export async function switchUserRole(userId, newRole) {
   try {
-    const user = await api.request(`/users/${userId}/role`, {
+    const response = await api.request(`/users/${userId}/role`, {
       method: 'PUT',
       body: JSON.stringify({ newRole })
     });
+
+    const { user } = normalizeUserObject(response);
+    
+    // Update localStorage
+    localStorage.setItem('userData', JSON.stringify(user));
+    
     return user;
   } catch (error) {
     console.error('Role switch failed:', error);
@@ -513,7 +370,6 @@ export async function getUserBookings(userId = null) {
   }
 }
 
-// Booking Details Function
 export async function getBookingDetails(bookingId) {
   try {
     if (!api.isAuthenticated()) {
@@ -528,28 +384,26 @@ export async function getBookingDetails(bookingId) {
   }
 }
 
-// Get base URL for frontend use
 export function getBaseUrl() {
   return API_URL;
 }
 
-    export async function updateBookingStatus(bookingId, action) {
+export async function updateBookingStatus(bookingId, action) {
   try {
-    // Map frontend actions to backend endpoints
     const actionMap = {
       'confirmed': 'accept',
       'declined': 'decline', 
       'in_progress': 'start',
       'completed': 'complete',
-      'pending_confirmation': 'complete',  // When artisan marks as complete
-      'confirm_completion': 'confirm',     // When client confirms
+      'pending_confirmation': 'complete',
+      'confirm_completion': 'confirm',
       'reject_completion': 'reject',
       'cancelled': 'cancel'
     };
     
     const endpoint = actionMap[action];
     if (!endpoint) {
-      throw new Error(`Unknown action: ${action}. Valid actions: ${Object.keys(actionMap).join(', ')}`);
+      throw new Error(`Unknown action: ${action}`);
     }
     
     const booking = await api.request(`/bookings/${bookingId}/${endpoint}`, {
@@ -577,7 +431,6 @@ export async function getReviewsForArtisan(artisanId) {
 export async function getAllReviewsForRating(artisanId) {
   try {
     const reviews = await api.request(`/reviews/artisan/${artisanId}`);
-    // Return only rating data for calculation
     return reviews.map(review => ({ rating: review.rating }));
   } catch (error) {
     console.error('Failed to get reviews for rating:', error);
@@ -608,13 +461,7 @@ async function createNotification(userId, title, message, type = 'booking', data
   try {
     const notification = await api.request('/notifications', {
       method: 'POST',
-      body: JSON.stringify({
-        user: userId,
-        title,
-        message,
-        type,
-        data
-      })
+      body: JSON.stringify({ user: userId, title, message, type, data })
     });
     return notification;
   } catch (error) {
@@ -632,7 +479,6 @@ export async function getNotifications() {
     }
 
     const notifications = await api.request('/notifications');
-    console.log('Retrieved notifications:', notifications);
     return notifications;
   } catch (error) {
     console.error('Failed to get notifications:', error);
@@ -722,10 +568,14 @@ export function getAvatarUrl(user, size = '100x100') {
 // Theme Functions
 export async function toggleTheme(userId, theme) {
   try {
-    const user = await api.request(`/users/${userId}/theme`, {
+    const response = await api.request(`/users/${userId}/theme`, {
       method: 'PUT',
       body: JSON.stringify({ theme })
     });
+    
+    const { user } = normalizeUserObject(response);
+    localStorage.setItem('userData', JSON.stringify(user));
+    
     return user;
   } catch (error) {
     console.error('Theme update failed:', error);
@@ -742,15 +592,13 @@ export function formatCurrency(amount) {
   }).format(amount);
 }
 
-// Real-time functionality placeholder
-// Note: For real-time features, you'll need to implement WebSocket or Socket.IO
 export function subscribeToBookings(userId, callback) {
-  console.warn('Real-time subscriptions not implemented yet. Consider using Socket.IO.');
+  console.warn('Real-time subscriptions not implemented yet.');
   return null;
 }
 
 export function subscribeToNotifications(userId, callback) {
-  console.warn('Real-time subscriptions not implemented yet. Consider using Socket.IO.');
+  console.warn('Real-time subscriptions not implemented yet.');
   return null;
 }
 
@@ -758,5 +606,4 @@ export function unsubscribe(subscription) {
   console.warn('Real-time subscriptions not implemented yet.');
 }
 
-// Export API client for advanced usage export { api };
-
+//export { api };

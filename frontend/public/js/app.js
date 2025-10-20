@@ -1090,9 +1090,13 @@ renderSearchResultCard(artisan) {
 
   return `
     <div class="search-result-card" data-id="${artisan.id}">
-      <img style="width: 100px; height: 100px;" src="${artisan.photo || '../assets/avatar-placeholder.png'}" 
-           alt="${this.escapeHtml(artisan.name)}"
-           onerror="this.src='../assets/avatar-placeholder.png'">
+     <img 
+  src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
+  alt="${this.escapeHtml(artisan.name)}"
+  loading="lazy"
+  onerror="this.src='../assets/avatar-placeholder.png'"
+  width="100" height="100"
+/>
       <div class="search-result-info">
         <h4>${this.escapeHtml(artisan.name)} ${this.renderVerificationBadge(artisan)}</h4>
         <p class="search-result-skill">${this.escapeHtml(artisan.skill)}</p>
@@ -2043,46 +2047,6 @@ async authenticateWithGoogle() {
   }
 
   try {
-    // Disable the submit button to prevent double submission
-    const submitBtn = document.querySelector('#login-form button[type="submit"]');
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
-    }
-
-    const user = await API.loginUser(email, password);
-    
-    this.setState({ user });
-    this.hideModal(); // Make sure this method exists
-    this.showToast('Login successful!', 'success');
-    
-    // Reload profile page if we're currently on it
-    if (this.currentPage === 'profile') {
-      this.loadProfilePage();
-    }
-    
-  } catch (error) {
-    console.error('Login failed:', error);
-    this.showToast('Login failed. Please check your credentials.', 'error');
-    
-    // Re-enable the submit button
-    const submitBtn = document.querySelector('#login-form button[type="submit"]');
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login';
-    }
-  }
-} **/
-async handleLogin() {
-  const email = document.querySelector('#auth-email')?.value;
-  const password = document.querySelector('#auth-pass')?.value;
-
-  if (!email || !password) {
-    this.showToast('Please fill in all fields', 'error');
-    return;
-  }
-
-  try {
     const submitBtn = document.querySelector('#login-form button[type="submit"]');
     if (submitBtn) {
       submitBtn.disabled = true;
@@ -2125,49 +2089,6 @@ async handleLogin() {
   }
 }
 
-/** async handleSignup() {
-  const name = document.querySelector('#signup-name')?.value;
-  const email = document.querySelector('#signup-email')?.value;
-  const password = document.querySelector('#signup-pass')?.value;
-  const location = document.querySelector('#signup-location')?.value;
-  const role = document.querySelector('#signup-role')?.value;
-
-  if (!name || !email || !password || !location) {
-    this.showToast('Please fill in all fields', 'error');
-    return;
-  }
-
-  try {
-    // Disable the submit button
-    const submitBtn = document.querySelector('#signup-form button[type="submit"]');
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing up...';
-    }
-
-    const user = await API.registerUser({ name, email, password, location, role });
-    
-    this.setState({ user });
-    this.hideModal();
-    this.showToast('Account created successfully!', 'success');
-    
-    // Reload profile page if we're currently on it
-    if (this.currentPage === 'profile') {
-      this.loadProfilePage();
-    }
-    
-  } catch (error) {
-    console.error('Signup failed:', error);
-    this.showToast('Signup failed. Please try again.', 'error');
-    
-    // Re-enable the submit button
-    const submitBtn = document.querySelector('#signup-form button[type="submit"]');
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Sign Up';
-    }
-  }
-} **/
 async handleSignup() {
   const name = document.querySelector('#signup-name')?.value;
   const email = document.querySelector('#signup-email')?.value;
@@ -2218,10 +2139,318 @@ async handleSignup() {
       submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Sign Up';
     }
   }
+} **/
+
+    async handleLogin() {
+  const email = document.querySelector('#auth-email')?.value;
+  const password = document.querySelector('#auth-pass')?.value;
+
+  if (!email || !password) {
+    this.showToast('Please fill in all fields', 'error');
+    return;
+  }
+
+  try {
+    const submitBtn = document.querySelector('#login-form button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
+    }
+
+    const user = await API.loginUser(email, password);
+    
+    // NORMALIZE: Ensure both id and _id exist
+    user.id = user.id || user._id;
+    user._id = user._id || user.id;
+    
+    // CRITICAL: Save to state AND localStorage
+    this.setState({ user });
+    
+    // Save user data and token to localStorage
+    localStorage.setItem('userData', JSON.stringify(user));
+    
+    // Make sure your API also saves the auth token
+    if (user.token) {
+      localStorage.setItem('authToken', user.token);
+    }
+    
+    this.hideModal();
+    this.showToast('Login successful!', 'success');
+    
+    // Check if user was trying to access a specific page
+    const returnTo = sessionStorage.getItem('returnTo');
+    if (returnTo) {
+      sessionStorage.removeItem('returnTo');
+      window.location.href = returnTo;
+    }
+    
+  } catch (error) {
+    console.error('Login failed:', error);
+    this.showToast('Login failed. Please check your credentials.', 'error');
+    
+    const submitBtn = document.querySelector('#login-form button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login';
+    }
+  }
 }
 
+async handleSignup() {
+  const name = document.querySelector('#signup-name')?.value;
+  const email = document.querySelector('#signup-email')?.value;
+  const password = document.querySelector('#signup-pass')?.value;
+  const location = document.querySelector('#signup-location')?.value;
+  const role = document.querySelector('#signup-role')?.value;
 
-  async openProfileUpdate() {
+  if (!name || !email || !password || !location) {
+    this.showToast('Please fill in all fields', 'error');
+    return;
+  }
+
+  try {
+    const submitBtn = document.querySelector('#signup-form button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing up...';
+    }
+
+    const user = await API.registerUser({ name, email, password, location, role });
+    
+    // NORMALIZE: Ensure both id and _id exist
+    user.id = user.id || user._id;
+    user._id = user._id || user.id;
+    
+    // CRITICAL: Save to state AND localStorage
+    this.setState({ user });
+    
+    // Save user data and token
+    localStorage.setItem('userData', JSON.stringify(user));
+    if (user.token) {
+      localStorage.setItem('authToken', user.token);
+    }
+    
+    this.hideModal();
+    this.showToast('Account created successfully!', 'success');
+    
+    // Check for return URL
+    const returnTo = sessionStorage.getItem('returnTo');
+    if (returnTo) {
+      sessionStorage.removeItem('returnTo');
+      window.location.href = returnTo;
+    }
+    
+  } catch (error) {
+    console.error('Signup failed:', error);
+    this.showToast('Signup failed. Please try again.', 'error');
+    
+    const submitBtn = document.querySelector('#signup-form button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Sign Up';
+    }
+  }
+}
+
+    async openProfileUpdate() {
+  if (!this.state.user) {
+    window.location.href = 'auth.html';
+    return;
+  }
+  
+  const user = this.state.user;
+  const avatarUrl = user?.avatar || '../assets/avatar-placeholder.png';
+  
+  const html = `
+    <div class="profile-update-modal">
+      <h2>Update Profile</h2>
+      
+      <form id="profile-form" class="booking-form">
+        <div class="profile-image-upload">
+          <label for="profile-image" class="upload-label">
+            <img id="profile-preview" src="${avatarUrl}" 
+                 alt="Profile preview" class="profile-preview">
+            <div class="upload-overlay">
+              <i class="fas fa-camera"></i>
+              <span>Change Photo</span>
+            </div>
+          </label>
+          <input type="file" id="profile-image" accept="image/*" style="display: none;">
+        </div>
+        
+        <label>
+          Name
+          <input id="upd-name" type="text" value="${this.escapeHtml(user.name || '')}" required>
+        </label>
+        
+        <label>
+          Skill
+          <input id="upd-skill" type="text" value="${this.escapeHtml(user.skill || 'General services')}" required>
+        </label>
+        
+        <label>
+          Years of Experience
+          <input id="upd-experience" type="number" value="${user.years_experience || ''}" min="0" required>
+        </label>
+        
+        <label>
+          Phone (WhatsApp)
+          <input id="upd-phone" type="tel" value="${this.escapeHtml(user.phone || '')}" placeholder="08123456789">
+        </label>
+        
+        <label>
+          About
+          <textarea id="upd-about" rows="3" required>${this.escapeHtml(user.about || 'A professional with more than 5 years experience.')}</textarea>
+        </label>
+        
+        <label>
+          Location
+          <select id="upd-location" required>
+            ${this.state.cities.map(city => 
+              `<option value="${city}" ${city === user.location ? 'selected' : ''}>${city}</option>`
+            ).join('')}
+          </select>
+        </label>
+        
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+          <button type="button" id="save-profile" class="btn-primary">
+            <i class="fas fa-save"></i> Save Changes
+          </button>
+          <button type="button" id="cancel-profile" class="link-btn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  this.showModal(html, () => {
+    // Image preview functionality
+    const imageInput = this.$('#profile-image');
+    const imagePreview = this.$('#profile-preview');
+    
+    imageInput?.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          this.showToast('Image must be less than 5MB', 'error');
+          imageInput.value = '';
+          return;
+        }
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          this.showToast('Please select a valid image file', 'error');
+          imageInput.value = '';
+          return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          imagePreview.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    this.$('#save-profile')?.addEventListener('click', () => this.handleProfileUpdate());
+    this.$('#cancel-profile')?.addEventListener('click', () => this.hideModal());
+  });
+}
+
+async handleProfileUpdate() {
+  // Get user ID with fallback
+  const userId = this.state.user?.id || this.state.user?._id;
+  
+  if (!userId) {
+    console.error("No valid user ID found in state:", this.state.user);
+    this.showToast("Unable to update profile: invalid session", "error");
+    return;
+  }
+
+  // Collect form data
+  const name = this.$('#upd-name')?.value?.trim();
+  const skill = this.$('#upd-skill')?.value?.trim();
+  const years_experience = this.$('#upd-experience')?.value;
+  const phone = this.$('#upd-phone')?.value?.trim();
+  const about = this.$('#upd-about')?.value?.trim();
+  const location = this.$('#upd-location')?.value;
+
+  // Validate required fields
+  if (!name) {
+    this.showToast('Name is required', 'error');
+    return;
+  }
+  
+  if (!skill) {
+    this.showToast('Skill is required', 'error');
+    return;
+  }
+  
+  if (!location) {
+    this.showToast('Location is required', 'error');
+    return;
+  }
+
+  try {
+    // Disable save button
+    const saveBtn = this.$('#save-profile');
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    }
+
+    // Prepare updates object
+    const updates = {
+      name,
+      skill,
+      years_experience: years_experience || 0,
+      phone,
+      about,
+      location
+    };
+
+    // Step 1: Update text fields
+    const updatedUser = await API.updateUserProfile(userId, updates);
+
+    // Step 2: Upload avatar if selected
+    const imageInput = this.$('#profile-image');
+    const imageFile = imageInput?.files[0];
+    if (imageFile) {
+      const uploadResult = await API.uploadProfileImage(userId, imageFile);
+      // Merge avatar URL into updated user
+      if (uploadResult?.avatar) {
+        updatedUser.avatar = uploadResult.avatar;
+      }
+    }
+
+    // Normalize user ID fields
+    updatedUser.id = updatedUser.id || updatedUser._id;
+    updatedUser._id = updatedUser._id || updatedUser.id;
+
+    // Update state and localStorage
+    this.setState({ user: updatedUser });
+    localStorage.setItem('userData', JSON.stringify(updatedUser));
+    
+    this.hideModal();
+    this.showToast('Profile updated successfully!', 'success');
+    
+    // Optionally reload to reflect changes everywhere
+    setTimeout(() => window.location.reload(), 1000);
+    
+  } catch (error) {
+    console.error('Profile update failed:', error);
+    this.showToast(error.message || 'Failed to update profile', 'error');
+    
+    // Re-enable save button
+    const saveBtn = this.$('#save-profile');
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+    }
+  }
+}
+
+ /** async openProfileUpdate() {
     if (!this.state.user) {
       window.location.href = 'auth.html';
       return;
@@ -2421,7 +2650,7 @@ async handleProfileUpdate() {
     console.error('Profile update failed:', error);
     this.showToast('Failed to update profile', 'error');
   }
-}
+}**/
 /**async handleProfileUpdate() {
   const updates = {
     name: this.$('#upd-name')?.value,
@@ -2548,10 +2777,12 @@ async performLogoutCleanup() {
       <div class="artisan-profile-modal">
         <div class="profile-header">
           <img 
-            style="max-width: 320px; max-height: 320px; border-radius: 10px;" 
-            src="${artisan.photo || '../assets/avatar-placeholder.png'}" 
-            alt="${this.escapeHtml(artisan.name)}" 
-            class="profile-avatar">
+  src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
+  alt="${this.escapeHtml(artisan.name)}"
+  loading="lazy"
+  onerror="this.src='../assets/avatar-placeholder.png'"
+  width="100" height="100"
+/>
           <div class="profile-info">
             <h2>
               ${this.escapeHtml(artisan.name)} 
@@ -2709,10 +2940,13 @@ async performLogoutCleanup() {
     const html = `
       <div class="booking-modal">
         <h2>Book ${this.escapeHtml(artisan.name)}</h2>
-        <div class="booking-summary">
-          <img style="width: 80px; height: 80px; border-radius: 10px; object-fit: cover;" 
-               src="${artisan.photo || '../assets/avatar-placeholder.png'}" 
-               alt="${this.escapeHtml(artisan.name)}">
+        <img 
+  src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
+  alt="${this.escapeHtml(artisan.name)}"
+  loading="lazy"
+  onerror="this.src='../assets/avatar-placeholder.png'"
+  width="100" height="100"
+/>
           <div>
             <strong>${this.escapeHtml(artisan.name)}</strong>
             <p class="muted">${this.escapeHtml(artisan.skill)} • ${this.formatCurrency(artisan.rate || 5000)}</p>
@@ -3118,7 +3352,13 @@ async performLogoutCleanup() {
         <div class="emergency-list">
           ${emergencyArtisans.map(artisan => `
             <div class="emergency-item" data-id="${artisan.id}">
-              <img style="width: 300px; height: 300px; border-radius: 10px;" src="${artisan.photo || '../assets/avatar-placeholder.png'}" alt="${this.escapeHtml(artisan.name)}">
+              <img 
+  src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
+  alt="${this.escapeHtml(artisan.name)}"
+  loading="lazy"
+  onerror="this.src='../assets/avatar-placeholder.png'"
+  width="100" height="100"
+/>
               <div>
                 <strong>${this.escapeHtml(artisan.name)}</strong>
                 <p class="muted">${this.escapeHtml(artisan.skill)} • ${this.escapeHtml(artisan.location)}</p>
@@ -4863,7 +5103,13 @@ openBookingDetailsOverlay(bookingId) {
           <h2>Review ${this.escapeHtml(artisan.name)}</h2>
           
           <div class="review-artisan-info">
-            <img src="${artisan.photo || '../assets/avatar-placeholder.png'}" alt="${this.escapeHtml(artisan.name)}">
+            <img 
+  src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
+  alt="${this.escapeHtml(artisan.name)}"
+  loading="lazy"
+  onerror="this.src='../assets/avatar-placeholder.png'"
+  width="100" height="100"
+/>
             <div>
               <strong>${this.escapeHtml(artisan.name)}</strong>
               <p class="muted">${this.escapeHtml(artisan.skill)}</p>
@@ -5074,9 +5320,13 @@ openBookingDetailsOverlay(bookingId) {
         <div class="featured-grid">
           ${artisansWithRatings.map(artisan => `
             <div class="featured-card" data-id="${artisan.id}">
-              <img style="width: 300px; height: 250px; border-radius: 10px; object-fit: cover;" 
-                   src="${artisan.photo || '../assets/avatar-placeholder.png'}" 
-                   alt="${this.escapeHtml(artisan.name)}">
+              <img 
+  src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
+  alt="${this.escapeHtml(artisan.name)}"
+  loading="lazy"
+  onerror="this.src='../assets/avatar-placeholder.png'"
+  width="100" height="100"
+/>
               <div class="featured-info">
                 <strong>${this.escapeHtml(artisan.name)} ${this.renderVerificationBadge(artisan)}</strong>
                 <p class="muted">${this.escapeHtml(artisan.skill)}</p>
@@ -5692,9 +5942,13 @@ isModalOpen(type) {
     container.innerHTML = featured.map(artisan => `
     <div class="step-container">
   <div class="feat-card" data-id="${artisan.id}" title="${this.escapeHtml(artisan.name)}">
-    <img src="${artisan.photo || '../assets/avatar-placeholder.png'}" 
-         alt="${this.escapeHtml(artisan.name)}"
-         loading="lazy">
+    <img 
+  src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
+  alt="${this.escapeHtml(artisan.name)}"
+  loading="lazy"
+  onerror="this.src='../assets/avatar-placeholder.png'"
+  width="100" height="100"
+/>
 
     <div class="feat-skill">
       ${this.escapeHtml(artisan.skill)}
