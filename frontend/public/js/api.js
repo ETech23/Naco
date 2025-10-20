@@ -1,7 +1,8 @@
 // Detect environment and use appropriate API URL
 const API_URL = window.location.hostname === 'localhost' 
-  ? 'http://localhost:8091'  // Local development
-  : 'https://naco-backend-r0hn.onrender.com'; 
+  ? 'https://naco.onrender.com'
+  : 'http://localhost:8091';
+  // 'https://naco-bac kend-r0hn.onrender.com'; 
 
 class ApiClient {
   constructor(baseURL) {
