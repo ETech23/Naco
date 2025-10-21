@@ -1088,7 +1088,7 @@ app.get('/reviews/artisan/:id', async (req, res) => {
 });
 
 // Create review
-appapp.post('/reviews', authenticateToken, async (req, res) => {
+app.post('/reviews', authenticateToken, async (req, res) => {
   try {
     const { bookingId, artisanId, rating, text } = req.body;
 
