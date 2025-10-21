@@ -307,6 +307,8 @@ setupNetworkMonitoring() {
     this.createModalContainer();
     this.initializeModalCSS();
     
+    this.setupImageRetryLogic();
+    
     this.setupNetworkMonitoring();
     this.debounceTimers = new Map();
     
@@ -1082,8 +1084,87 @@ async processBatch(items, batchSize, processor) {
   return results;
 }
 
+getOptimizedImageUrl(imageUrl, options = {}) {
+  if (!imageUrl) return '../assets/avatar-placeholder.png';
+  
+  // For Cloudinary URLs, add transformations
+  if (imageUrl.includes('cloudinary.com') && imageUrl.includes('/upload/')) {
+    const width = options.width || 400;
+    const quality = options.quality || 'auto';
+    const format = options.format || 'auto';
+    
+    // Add transformations after /upload/
+    return imageUrl.replace(
+      '/upload/',
+      `/upload/f_${format},q_${quality},w_${width},c_limit/`
+    );
+  }
+  
+  // For relative URLs from your backend
+  if (imageUrl.startsWith('/uploads/')) {
+    return `${API.getBaseUrl()}${imageUrl}`;
+  }
+  
+  // For absolute URLs or already optimized, return as-is
+  return imageUrl;
+}
 
-renderSearchResultCard(artisan) {
+    createImageWithPlaceholder(imageUrl, alt, options = {}) {
+  const optimizedUrl = this.getOptimizedImageUrl(imageUrl, options);
+  const placeholderUrl = this.getOptimizedImageUrl(imageUrl, { 
+    width: 50, 
+    quality: 10,
+    effect: 'blur:1000' 
+  });
+  
+  return `
+    <div class="image-container" style="position: relative; background: #f0f0f0;">
+      <img 
+        src="${placeholderUrl}"
+        data-src="${optimizedUrl}"
+        alt="${alt}"
+        class="lazy-image blur-up"
+        loading="lazy"
+        onerror="this.src='../assets/avatar-placeholder.png'"
+        style="
+          filter: blur(10px);
+          transition: filter 0.3s;
+        "
+        onload="
+          const highRes = new Image();
+          highRes.onload = () => {
+            this.src = highRes.src;
+            this.style.filter = 'blur(0)';
+          };
+          highRes.src = this.dataset.src;
+        "
+      />
+    </div>
+  `;
+}
+
+    setupImageRetryLogic() {
+  // Use event delegation for dynamically added images
+  document.addEventListener('error', (e) => {
+    if (e.target.tagName === 'IMG' && e.target.dataset.retryCount !== '3') {
+      const retryCount = parseInt(e.target.dataset.retryCount || '0');
+      e.target.dataset.retryCount = (retryCount + 1).toString();
+      
+      // Exponential backoff
+      setTimeout(() => {
+        const originalSrc = e.target.src;
+        e.target.src = ''; // Force reload
+        e.target.src = originalSrc;
+      }, Math.pow(2, retryCount) * 1000);
+    } else if (e.target.dataset.retryCount === '3') {
+      // After 3 retries, use placeholder
+      e.target.src = '../assets/avatar-placeholder.png';
+      e.target.removeAttribute('data-retry-count');
+    }
+  }, true); // Use capture phase
+}
+
+/**renderSearchResultCard(artisan) {
   // No API call here - just use the pre-calculated rating
   const averageRating = (artisan.rating || 0).toFixed(1);
   const reviewCount = artisan.reviewCount || 0;
@@ -1112,9 +1193,38 @@ renderSearchResultCard(artisan) {
     </div>
   `;
 }
+**/
 
+    renderSearchResultCard(artisan) {
+  const averageRating = (artisan.rating || 0).toFixed(1);
+  const reviewCount = artisan.reviewCount || 0;
+  const optimizedImage = this.getOptimizedImageUrl(artisan.photo, { width: 200, quality: 'auto' });
 
-
+  return `
+    <div class="search-result-card" data-id="${artisan.id}">
+      <img 
+        src="${optimizedImage}"
+        alt="${this.escapeHtml(artisan.name)}"
+        loading="lazy"
+        onerror="this.src='../assets/avatar-placeholder.png'"
+        width="100" 
+        height="100"
+      />
+      <div class="search-result-info">
+        <h4>${this.escapeHtml(artisan.name)} ${this.renderVerificationBadge(artisan)}</h4>
+        <p class="search-result-skill">${this.escapeHtml(artisan.skill)}</p>
+        <p class="search-result-location">${this.escapeHtml(artisan.location)}</p>
+        <div class="search-result-rating">
+          <i class="fas fa-star"></i> ${averageRating} (${reviewCount} reviews)
+          ${artisan.premium ? '<span class="premium-badge">PREMIUM</span>' : ''}
+        </div>
+      </div>
+      <div class="search-result-price">
+        ${this.formatCurrency(artisan.rate)}
+      </div>
+    </div>
+  `;
+}
  
 
   clearMainSearch() {
@@ -5931,7 +6041,7 @@ isModalOpen(type) {
     }
   }
 
-  renderFeaturedArtisans() {
+ /** renderFeaturedArtisans() {
     const container = this.$('#featured-list');
     if (!container) return;
 
@@ -5959,8 +6069,41 @@ isModalOpen(type) {
 
     container.classList.add('fade-in');
     this.bindFeaturedClickEvents();
-  }
+  }**/
+    renderFeaturedArtisans() {
+  const container = this.$('#featured-list');
+  if (!container) return;
 
+  const featured = this.state.featuredArtisans
+    .filter(artisan => !this.state.selectedCity || artisan.location === this.state.selectedCity)
+    .slice(0, 8);
+
+  container.innerHTML = featured.map(artisan => {
+    const optimizedImage = this.getOptimizedImageUrl(artisan.photo, { width: 150, quality: 'auto' });
+    
+    return `
+      <div class="step-container">
+        <div class="feat-card" data-id="${artisan.id}" title="${this.escapeHtml(artisan.name)}">
+          <img 
+            src="${optimizedImage}"
+            alt="${this.escapeHtml(artisan.name)}"
+            loading="lazy"
+            onerror="this.src='../assets/avatar-placeholder.png'"
+            width="100" 
+            height="100"
+          />
+          <div class="feat-skill">
+            ${this.escapeHtml(artisan.skill)}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.classList.add('fade-in');
+  this.bindFeaturedClickEvents();
+}
+    
   bindFeaturedClickEvents() {
     const featuredList = this.$('#featured-list');
     if (!featuredList) return;

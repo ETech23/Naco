@@ -203,7 +203,7 @@ const authenticateToken = (req, res, next) => {
   },
 });**/
 
-const storage = new CloudinaryStorage({
+/** const storage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: 'naco_uploads',
@@ -215,6 +215,35 @@ const storage = new CloudinaryStorage({
 const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+});  **/
+
+    const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'naco_uploads',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [
+      { width: 800, height: 800, crop: 'limit' }, // Limit max size
+      { quality: 'auto:good' }, // Auto quality optimization
+      { fetch_format: 'auto' } // Auto format selection (WebP when supported)
+    ],
+    public_id: (req, file) => file.fieldname + '-' + Date.now()
+  },
+});
+
+// Update upload configuration for better compression:
+const upload = multer({
+  storage: storage,
+  limits: { 
+    fileSize: 2 * 1024 * 1024 // Reduce to 2MB max
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
 });
 
 // Helper Functions
@@ -232,7 +261,10 @@ const formatArtisanData = (user, completedJobsCount = null) => {
     phone: user.phone || '',
     location: user.location,
     premium: user.premium || false,
-    photo: user.avatar || null,
+    photo: user.avatar || null, // Cloudinary URL
+    photoOptimized: user.avatar ? 
+      user.avatar.replace('/upload/', '/upload/f_auto,q_auto,w_400,c_limit/') : 
+      null,
     skill: user.skill || 'General Services',
     specialties: user.artisanProfile?.specialties || [],
     description: user.artisanProfile?.description || '',

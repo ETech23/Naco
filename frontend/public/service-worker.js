@@ -26,8 +26,8 @@
  **************************************************************/
 
 // ---------------- CONFIG / VERSIONING ----------------
-const STATIC_VERSION = 'v1.5.8';   // bump when static files change
-const API_VERSION = 'v1.5.8';      // bump when api caching behavior should reset
+const STATIC_VERSION = 'v1.5.9';   // bump when static files change
+const API_VERSION = 'v1.5.9';      // bump when api caching behavior should reset
 
 const STATIC_CACHE = `naco-static-${STATIC_VERSION}`;
 const API_CACHE = `naco-api-${API_VERSION}`;

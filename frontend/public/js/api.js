@@ -143,6 +143,22 @@ function normalizeArrayResponse(response, key = null) {
   return [];
 }
 
+export function getOptimizedCloudinaryUrl(url, options = {}) {
+  if (!url || !url.includes('cloudinary.com')) {
+    return url || null;
+  }
+  
+  const width = options.width || 400;
+  const quality = options.quality || 'auto';
+  const format = options.format || 'auto';
+  
+  // Replace /upload/ with transformation parameters
+  return url.replace(
+    '/upload/',
+    `/upload/f_${format},q_${quality},w_${width},c_limit/`
+  );
+}
+
 // Authentication Functions
 export async function registerUser(userData) {
   try {
