@@ -904,8 +904,8 @@
           return user.avatar;
         }
         const baseUrl = window.location.hostname === 'localhost' 
-          ? 'https://naco.onrender.com'
-          : 'http://localhost:8091';
+          ? 'http://localhost:8091'
+          : 'https://naco.onrender.com';
         return `${baseUrl}/uploads/avatars/${user.avatar}`;
       }
       

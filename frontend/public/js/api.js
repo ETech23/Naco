@@ -1,8 +1,7 @@
 // Detect environment and use appropriate API URL
 const API_URL = window.location.hostname === 'localhost' 
-  ? 'https://naco.onrender.com'
-  : 'http://localhost:8091';
-  // 'https://naco-bac kend-r0hn.onrender.com'; 
+  ? 'http://localhost:8091'
+  : 'https://naco.onrender.com';
 
 class ApiClient {
   constructor(baseURL) {
@@ -10,12 +9,10 @@ class ApiClient {
     this.token = localStorage.getItem('authToken');
   }
 
-  // Helper method for making requests
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
     const headers = { ...options.headers };
 
-    // Only set JSON Content-Type if body is not FormData
     if (!(options.body instanceof FormData)) {
       headers['Content-Type'] = 'application/json';
     }
@@ -25,13 +22,11 @@ class ApiClient {
       headers
     };
 
-    // Add auth token if available
     if (this.token) {
       config.headers.Authorization = `Bearer ${this.token}`;
     }
 
     try {
-      // Check if online
       if (!navigator.onLine) {
         throw new Error('You are currently offline. Please check your internet connection.');
       }
@@ -55,7 +50,6 @@ class ApiClient {
     }
   }
 
-  // Set auth token
   setAuthToken(token) {
     this.token = token;
     if (token) {
@@ -65,21 +59,18 @@ class ApiClient {
     }
   }
 
-  // Get auth token
   getAuthToken() {
     return this.token || localStorage.getItem('authToken');
   }
 
-  // Check if authenticated
   isAuthenticated() {
     return !!this.getAuthToken();
   }
 }
 
-// Create API client instance
 export const api = new ApiClient(API_URL);
 
-// HELPER: Normalize user object to always have both id and _id
+// ✅ HELPER: Normalize user object to always have both id and _id
 function normalizeUserObject(response) {
   console.log('🔍 Raw response:', response);
   
@@ -128,6 +119,28 @@ function normalizeUserObject(response) {
   if (token) console.log('✅ Token extracted');
 
   return { user: normalizedUser, token };
+}
+
+// ✅ HELPER: Normalize array responses
+function normalizeArrayResponse(response, key = null) {
+  // If response is already an array
+  if (Array.isArray(response)) {
+    return response;
+  }
+  
+  // If response has a data property that's an array
+  if (response.data && Array.isArray(response.data)) {
+    return response.data;
+  }
+  
+  // If a specific key is provided and it contains an array
+  if (key && Array.isArray(response[key])) {
+    return response[key];
+  }
+  
+  // Default: return empty array
+  console.warn('⚠️ Unexpected array response structure:', response);
+  return [];
 }
 
 // Authentication Functions
@@ -245,7 +258,7 @@ export async function updateUserProfile(userId, updates) {
 
     const { user } = normalizeUserObject(response);
     
-    // Update localStorage with new data
+    // ✅ Update localStorage with new data
     localStorage.setItem('userData', JSON.stringify(user));
     
     return user;
@@ -267,7 +280,7 @@ export async function uploadProfileImage(userId, file) {
 
     const { user } = normalizeUserObject(response);
     
-    // Update localStorage with new avatar
+    // ✅ Update localStorage with new avatar
     localStorage.setItem('userData', JSON.stringify(user));
 
     return user;
@@ -286,7 +299,7 @@ export async function switchUserRole(userId, newRole) {
 
     const { user } = normalizeUserObject(response);
     
-    // Update localStorage
+    // ✅ Update localStorage
     localStorage.setItem('userData', JSON.stringify(user));
     
     return user;
@@ -299,8 +312,9 @@ export async function switchUserRole(userId, newRole) {
 // Artisan Functions
 export async function getArtisans() {
   try {
-    const artisans = await api.request('/artisans');
-    return artisans;
+    const response = await api.request('/artisans');
+    // ✅ Normalize array response
+    return normalizeArrayResponse(response, 'artisans');
   } catch (error) {
     console.error('Failed to get artisans:', error);
     return [];
@@ -309,8 +323,9 @@ export async function getArtisans() {
 
 export async function getFullArtisanData(artisanId) {
   try {
-    const artisan = await api.request(`/artisans/${artisanId}`);
-    return artisan;
+    const response = await api.request(`/artisans/${artisanId}`);
+    // Handle potential nesting
+    return response.data?.artisan || response.artisan || response;
   } catch (error) {
     console.error('Failed to get full artisan data:', error);
     throw error;
@@ -330,8 +345,9 @@ export async function searchArtisans(query = '', city = '') {
       endpoint += `?${params.toString()}`;
     }
 
-    const artisans = await api.request(endpoint);
-    return artisans;
+    const response = await api.request(endpoint);
+    // ✅ Normalize array response
+    return normalizeArrayResponse(response, 'artisans');
   } catch (error) {
     console.error('Search failed:', error);
     return [];
@@ -345,12 +361,12 @@ export async function createBooking(bookingData) {
       throw new Error('Authentication required');
     }
 
-    const booking = await api.request('/bookings', {
+    const response = await api.request('/bookings', {
       method: 'POST',
       body: JSON.stringify(bookingData)
     });
 
-    return booking;
+    return response.data?.booking || response.booking || response;
   } catch (error) {
     console.error('Booking creation failed:', error);
     throw error;
@@ -363,8 +379,8 @@ export async function getUserBookings(userId = null) {
       return [];
     }
 
-    const bookings = await api.request('/bookings');
-    return bookings;
+    const response = await api.request('/bookings');
+    return normalizeArrayResponse(response, 'bookings');
   } catch (error) {
     console.error('Failed to get bookings:', error);
     return [];
@@ -377,8 +393,8 @@ export async function getBookingDetails(bookingId) {
       throw new Error('Authentication required');
     }
 
-    const booking = await api.request(`/bookings/${bookingId}`);
-    return booking;
+    const response = await api.request(`/bookings/${bookingId}`);
+    return response.data?.booking || response.booking || response;
   } catch (error) {
     console.error('Failed to get booking details:', error);
     throw error;
@@ -407,11 +423,11 @@ export async function updateBookingStatus(bookingId, action) {
       throw new Error(`Unknown action: ${action}`);
     }
     
-    const booking = await api.request(`/bookings/${bookingId}/${endpoint}`, {
+    const response = await api.request(`/bookings/${bookingId}/${endpoint}`, {
       method: 'PUT'
     });
 
-    return booking;
+    return response.data?.booking || response.booking || response;
   } catch (error) {
     console.error('Booking status update failed:', error);
     throw error;
@@ -421,8 +437,8 @@ export async function updateBookingStatus(bookingId, action) {
 // Review Functions
 export async function getReviewsForArtisan(artisanId) {
   try {
-    const reviews = await api.request(`/reviews/artisan/${artisanId}`);
-    return reviews;
+    const response = await api.request(`/reviews/artisan/${artisanId}`);
+    return normalizeArrayResponse(response, 'reviews');
   } catch (error) {
     console.error('Failed to get reviews:', error);
     return [];
@@ -431,7 +447,8 @@ export async function getReviewsForArtisan(artisanId) {
 
 export async function getAllReviewsForRating(artisanId) {
   try {
-    const reviews = await api.request(`/reviews/artisan/${artisanId}`);
+    const response = await api.request(`/reviews/artisan/${artisanId}`);
+    const reviews = normalizeArrayResponse(response, 'reviews');
     return reviews.map(review => ({ rating: review.rating }));
   } catch (error) {
     console.error('Failed to get reviews for rating:', error);
@@ -445,12 +462,12 @@ export async function createReview(reviewData) {
       throw new Error('Authentication required');
     }
 
-    const review = await api.request('/reviews', {
+    const response = await api.request('/reviews', {
       method: 'POST',
       body: JSON.stringify(reviewData)
     });
 
-    return review;
+    return response.data?.review || response.review || response;
   } catch (error) {
     console.error('Review creation failed:', error);
     throw error;
@@ -460,11 +477,11 @@ export async function createReview(reviewData) {
 // Notification Functions
 async function createNotification(userId, title, message, type = 'booking', data = {}) {
   try {
-    const notification = await api.request('/notifications', {
+    const response = await api.request('/notifications', {
       method: 'POST',
       body: JSON.stringify({ user: userId, title, message, type, data })
     });
-    return notification;
+    return response.data?.notification || response.notification || response;
   } catch (error) {
     console.error('Failed to create notification:', error);
     throw error;
@@ -479,8 +496,10 @@ export async function getNotifications() {
       return [];
     }
 
-    const notifications = await api.request('/notifications');
-    return notifications;
+    const response = await api.request('/notifications');
+    console.log('Retrieved notifications:', response);
+    // ✅ Normalize array response
+    return normalizeArrayResponse(response, 'notifications');
   } catch (error) {
     console.error('Failed to get notifications:', error);
     return [];
@@ -543,8 +562,8 @@ export async function getUserFavorites(userId = null) {
       return [];
     }
 
-    const favorites = await api.request('/favorites');
-    return favorites;
+    const response = await api.request('/favorites');
+    return normalizeArrayResponse(response, 'favorites');
   } catch (error) {
     console.error('Failed to get favorites:', error);
     return [];
@@ -575,6 +594,7 @@ export async function toggleTheme(userId, theme) {
     });
     
     const { user } = normalizeUserObject(response);
+    // ✅ Update localStorage
     localStorage.setItem('userData', JSON.stringify(user));
     
     return user;
