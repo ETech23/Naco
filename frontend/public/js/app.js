@@ -2873,7 +2873,7 @@ async performLogoutCleanup() {
 
   // Artisan Profile and Booking
   
-  async openArtisanProfile(artisanId) {
+  /**async openArtisanProfile(artisanId) {
   try {
     const artisan = await API.getFullArtisanData(artisanId);
     const reviews = await API.getReviewsForArtisan(artisanId);
@@ -3023,9 +3023,213 @@ async performLogoutCleanup() {
     console.error('Failed to load artisan profile:', error);
     this.showToast('Failed to load artisan profile', 'error');
   }
+}**/
+
+    async openArtisanProfile(artisanId) {
+  try {
+    const artisan = await API.getFullArtisanData(artisanId);
+    const reviews = await API.getReviewsForArtisan(artisanId);
+    
+    console.log('Reviews loaded:', reviews); // Debug log
+    
+    const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
+    const averageRating = reviews.length > 0 ? (totalRating / reviews.length).toFixed(1) : '0.0';
+    
+    const distance = this.calculateDistance(artisan.location);
+    
+    const html = `
+      <div class="artisan-profile-modal">
+        <div class="profile-header">
+          <img 
+            src="${artisan.photo ? this.getOptimizedImageUrl(artisan.photo, { width: 200 }) : '../assets/avatar-placeholder.png'}"
+            alt="${this.escapeHtml(artisan.name)}"
+            onerror="this.src='../assets/avatar-placeholder.png'"
+            width="100" 
+            height="100"
+          />
+          <div class="profile-info">
+            <h2>
+              ${this.escapeHtml(artisan.name)} 
+              ${this.renderVerificationBadge(artisan)}
+            </h2>
+            <p class="profile-skill">${this.escapeHtml(artisan.skill)}</p>
+            <p class="profile-location">
+              <i class="fas fa-map-marker-alt"></i> 
+              ${this.escapeHtml(artisan.location)} • ${distance} km away
+            </p>
+            <div class="profile-stats">
+              <span><i class="fas fa-star"></i> ${averageRating} (${reviews.length} reviews)</span>
+              <span><i class="fas fa-clock"></i> ${artisan.yearsExperience || 0}+ years</span>
+            </div>
+            <div class="profile-rate">${this.formatCurrency(artisan.rate || 0)}</div>
+          </div>
+        </div>
+        
+        <div class="profile-actions">
+          <button id="book-now-btn" class="btn-primary" data-artisan-id="${artisan.id}">
+            <i class="fas fa-calendar-plus"></i> Book Now
+          </button>
+          <button id="whatsapp-btn" class="link-btn" data-phone="${artisan.phone || ''}">
+            <i class="fab fa-whatsapp"></i> WhatsApp
+          </button>
+          <button id="favorite-btn" class="link-btn ${this.state.favorites.has(artisan.id) ? 'active' : ''}" data-artisan-id="${artisan.id}">
+            <i class="fas fa-heart"></i> ${this.state.favorites.has(artisan.id) ? 'Saved' : 'Save'}
+          </button>
+        </div>
+        
+        <div class="profile-section">
+          <h4>About</h4>
+          <p>${this.escapeHtml(artisan.about || artisan.description || 'No description available')}</p>
+        </div>
+        
+        ${(artisan.specialties && artisan.specialties.length > 0) ? `
+          <div class="profile-section">
+            <h4>Specialties</h4>
+            <div class="chips">
+              ${artisan.specialties.map(specialty => 
+                `<span class="chip">${this.escapeHtml(specialty)}</span>`
+              ).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        <div class="profile-section">
+          <h4>Reviews (${reviews.length})</h4>
+          <div class="reviews-list">
+            ${reviews.length > 0 ? reviews.slice(0, 5).map(review => this.renderReviewItem(review)).join('') : '<p class="muted">No reviews yet. Be the first to review this artisan!</p>'}
+          </div>
+          ${reviews.length > 5 ? `
+            <button id="view-all-reviews" class="link-btn" style="margin-top: 16px;">
+              View all ${reviews.length} reviews
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+
+    this.showModal(html, {
+      type: 'artisan-profile',
+      callback: (modal) => {
+        modal.addEventListener('click', (e) => {
+          e.stopPropagation();
+          
+          if (e.target.id === 'book-now-btn' || e.target.closest('#book-now-btn')) {
+            e.preventDefault();
+            if (!this.state.user) {
+              this.hideModal();
+              setTimeout(() => window.location.href = 'auth.html', 100);
+              return;
+            }
+            this.hideModal();
+            setTimeout(() => this.openBookingForm(artisan.id), 200);
+            return;
+          }
+          
+          if (e.target.id === 'whatsapp-btn' || e.target.closest('#whatsapp-btn')) {
+            e.preventDefault();
+            const phone = artisan.phone;
+            if (phone) {
+              const cleanPhone = phone.replace(/\D/g, '');
+              const message = `Hi ${artisan.name}, I found you on Naco and I'm interested in your ${artisan.skill} services.`;
+              window.open(`https://wa.me/234${cleanPhone.replace(/^0/, '')}?text=${encodeURIComponent(message)}`, '_blank');
+            } else {
+              this.showToast('Phone number not available', 'error');
+            }
+            return;
+          }
+          
+          if (e.target.id === 'favorite-btn' || e.target.closest('#favorite-btn')) {
+            e.preventDefault();
+            if (!this.state.user) {
+              this.hideModal();
+              setTimeout(() => window.location.href = 'auth.html', 100);
+              return;
+            }
+            this.toggleFavorite(artisan.id);
+            const btn = e.target.closest('#favorite-btn') || e.target;
+            const isNowFavorite = this.state.favorites.has(artisan.id);
+            btn.classList.toggle('active', isNowFavorite);
+            btn.innerHTML = `<i class="fas fa-heart"></i> ${isNowFavorite ? 'Saved' : 'Save'}`;
+            return;
+          }
+
+          if (e.target.id === 'view-all-reviews' || e.target.closest('#view-all-reviews')) {
+            e.preventDefault();
+            this.openAllReviews(artisan, reviews);
+            return;
+          }
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('Failed to load artisan profile:', error);
+    this.showToast('Failed to load artisan profile', 'error');
+  }
 }
 
+renderReviewItem(review) {
+  const reviewerAvatar = review.reviewerAvatar ? 
+    this.getOptimizedImageUrl(review.reviewerAvatar, { width: 50 }) : 
+    '../assets/avatar-placeholder.png';
+    
+  const reviewDate = new Date(review.date);
+  const formattedDate = reviewDate.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
 
+  return `
+    <div class="review-item">
+      <div class="review-header">
+        <div class="reviewer-info">
+          <img 
+            src="${reviewerAvatar}" 
+            alt="${this.escapeHtml(review.reviewerName)}"
+            class="reviewer-avatar"
+            onerror="this.src='../assets/avatar-placeholder.png'"
+          />
+          <div>
+            <strong>
+              ${this.escapeHtml(review.reviewerName)}
+              ${review.reviewerPremium ? '<i class="fas fa-check-circle verification-badge" title="Verified User"></i>' : ''}
+            </strong>
+            <div class="review-rating">
+              ${'⭐'.repeat(review.rating)}
+              <span class="rating-number">(${review.rating}/5)</span>
+            </div>
+          </div>
+        </div>
+        <span class="review-date">${formattedDate}</span>
+      </div>
+      ${review.text ? `<p class="review-text">${this.escapeHtml(review.text)}</p>` : ''}
+      ${review.service ? `<p class="review-service"><i class="fas fa-tools"></i> ${this.escapeHtml(review.service)}</p>` : ''}
+    </div>
+  `;
+}
+
+// Add method to show all reviews:
+openAllReviews(artisan, reviews) {
+  const html = `
+    <div class="all-reviews-modal">
+      <h2>All Reviews for ${this.escapeHtml(artisan.name)}</h2>
+      <p class="muted">${reviews.length} total reviews</p>
+      
+      <div class="reviews-list">
+        ${reviews.map(review => this.renderReviewItem(review)).join('')}
+      </div>
+      
+      <div style="text-align: center; margin-top: 20px;">
+        <button id="close-all-reviews" class="link-btn">Close</button>
+      </div>
+    </div>
+  `;
+
+  this.showModal(html, () => {
+    this.$('#close-all-reviews')?.addEventListener('click', () => this.hideModal());
+  });
+}
 
   async openBookingForm(artisanId) {
   console.log('Opening booking form for artisan:', artisanId);

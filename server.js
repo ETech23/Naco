@@ -1033,17 +1033,21 @@ app.put('/bookings/:id/:action', authenticateToken, async (req, res) => {
 app.get('/reviews/artisan/:id', async (req, res) => {
   try {
     const reviews = await Review.find({ artisan: req.params.id })
-      .populate('reviewer', 'name premium')
+      .populate('reviewer', 'name premium avatar') // Add avatar to populate
+      .populate('booking', 'service service_date') // Optional: include booking details
       .sort({ createdAt: -1 })
-      .limit(10);
+      .limit(50); // Increase limit to show more reviews
 
     const formattedReviews = reviews.map(review => ({
       id: review._id,
       rating: review.rating,
-      text: review.text,
+      text: review.text || review.comment || '', // Handle both field names
       reviewerName: review.reviewer?.name || 'Anonymous',
       reviewerPremium: review.reviewer?.premium || false,
-      date: review.createdAt
+      reviewerAvatar: review.reviewer?.avatar || null,
+      date: review.createdAt,
+      service: review.booking?.service || '',
+      serviceDate: review.booking?.service_date || null
     }));
 
     res.json(formattedReviews);
@@ -1053,6 +1057,78 @@ app.get('/reviews/artisan/:id', async (req, res) => {
   }
 });
 
+app.post('/reviews', authenticateToken, async (req, res) => {
+  try {
+    const { bookingId, artisanId, rating, text } = req.body;
+
+    // Validate inputs
+    if (!bookingId || !artisanId || !rating) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    if (rating < 1 || rating > 5) {
+      return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
+
+    // Check if review already exists for this booking
+    const existingReview = await Review.findOne({ booking: bookingId });
+    if (existingReview) {
+      return res.status(400).json({ error: 'Review already exists for this booking' });
+    }
+
+    // Verify the booking exists and belongs to the user
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    if (booking.bookerUserId.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'You can only review your own bookings' });
+    }
+
+    if (booking.status !== 'completed') {
+      return res.status(400).json({ error: 'Can only review completed bookings' });
+    }
+
+    const review = new Review({
+      booking: bookingId,
+      reviewer: req.user.id,
+      artisan: artisanId,
+      rating: Number(rating),
+      text: text || ''
+    });
+
+    await review.save();
+
+    // Update artisan's average rating
+    const reviews = await Review.find({ artisan: artisanId });
+    const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
+    const avgRating = totalRating / reviews.length;
+    
+    // Update artisan profile with new average
+    await ArtisanProfile.findOneAndUpdate(
+      { user: artisanId },
+      { rating: Math.round(avgRating * 10) / 10 }
+    );
+
+    // Populate the review before returning
+    const populatedReview = await Review.findById(review._id)
+      .populate('reviewer', 'name premium avatar');
+
+    res.status(201).json({
+      id: populatedReview._id,
+      rating: populatedReview.rating,
+      text: populatedReview.text,
+      reviewerName: populatedReview.reviewer?.name || 'Anonymous',
+      reviewerPremium: populatedReview.reviewer?.premium || false,
+      reviewerAvatar: populatedReview.reviewer?.avatar || null,
+      date: populatedReview.createdAt
+    });
+  } catch (error) {
+    console.error('Review creation failed:', error);
+    res.status(500).json({ error: 'Review creation failed' });
+  }
+});
 // Create review
 app.post('/reviews', authenticateToken, async (req, res) => {
   try {
