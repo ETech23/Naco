@@ -1033,22 +1033,52 @@ app.put('/bookings/:id/:action', authenticateToken, async (req, res) => {
 app.get('/reviews/artisan/:id', async (req, res) => {
   try {
     const reviews = await Review.find({ artisan: req.params.id })
-      .populate('reviewer', 'name premium avatar') // Add avatar to populate
-      .populate('booking', 'service service_date') // Optional: include booking details
+      .populate({
+        path: 'reviewer',
+        select: 'name premium avatar email' // Include email for debugging
+      })
+      .populate('booking', 'service service_date')
       .sort({ createdAt: -1 })
-      .limit(50); // Increase limit to show more reviews
+      .limit(50);
 
-    const formattedReviews = reviews.map(review => ({
-      id: review._id,
-      rating: review.rating,
-      text: review.text || review.comment || '', // Handle both field names
-      reviewerName: review.reviewer?.name || 'Anonymous',
-      reviewerPremium: review.reviewer?.premium || false,
-      reviewerAvatar: review.reviewer?.avatar || null,
-      date: review.createdAt,
-      service: review.booking?.service || '',
-      serviceDate: review.booking?.service_date || null
-    }));
+    // Debug log to see what we're getting
+    console.log('Reviews found:', reviews.length);
+    if (reviews.length > 0) {
+      console.log('Sample review data:', {
+        reviewer: reviews[0].reviewer,
+        hasAvatar: !!reviews[0].reviewer?.avatar
+      });
+    }
+
+    const formattedReviews = reviews.map(review => {
+      // Get avatar URL - handle both Cloudinary and local uploads
+      let avatarUrl = null;
+      if (review.reviewer?.avatar) {
+        // If it's already a full URL (Cloudinary)
+        if (review.reviewer.avatar.startsWith('http')) {
+          avatarUrl = review.reviewer.avatar;
+        } 
+        // If it's a relative path or filename
+        else {
+          avatarUrl = review.reviewer.avatar;
+        }
+      }
+
+      return {
+        id: review._id,
+        rating: review.rating,
+        text: review.text || review.comment || '',
+        reviewerName: review.reviewer?.name || 'Anonymous',
+        reviewerPremium: review.reviewer?.premium || false,
+        reviewerAvatar: avatarUrl,
+        reviewerEmail: review.reviewer?.email || null, // For debugging
+        date: review.createdAt,
+        service: review.booking?.service || '',
+        serviceDate: review.booking?.service_date || null
+      };
+    });
+
+    console.log('Formatted reviews sample:', formattedReviews[0]); // Debug log
 
     res.json(formattedReviews);
   } catch (error) {

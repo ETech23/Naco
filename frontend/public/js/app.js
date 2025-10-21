@@ -3169,9 +3169,19 @@ async performLogoutCleanup() {
 }
 
 renderReviewItem(review) {
-  const reviewerAvatar = review.reviewerAvatar ? 
-    this.getOptimizedImageUrl(review.reviewerAvatar, { width: 50 }) : 
-    '../assets/avatar-placeholder.png';
+  let reviewerAvatar = null;
+  
+  if (review.reviewerAvatar) {
+    if (review.reviewerAvatar.includes('cloudinary.com')) {
+      reviewerAvatar = this.getOptimizedImageUrl(review.reviewerAvatar, { width: 50 });
+    } else if (review.reviewerAvatar.startsWith('/uploads/')) {
+      reviewerAvatar = `${API.getBaseUrl()}${review.reviewerAvatar}`;
+    } else if (review.reviewerAvatar.startsWith('http')) {
+      reviewerAvatar = review.reviewerAvatar;
+    } else {
+      reviewerAvatar = `${API.getBaseUrl()}/uploads/${review.reviewerAvatar}`;
+    }
+  }
     
   const reviewDate = new Date(review.date);
   const formattedDate = reviewDate.toLocaleDateString('en-US', {
@@ -3184,12 +3194,7 @@ renderReviewItem(review) {
     <div class="review-item">
       <div class="review-header">
         <div class="reviewer-info">
-          <img 
-            src="${reviewerAvatar}" 
-            alt="${this.escapeHtml(review.reviewerName)}"
-            class="reviewer-avatar"
-            onerror="this.src='../assets/avatar-placeholder.png'"
-          />
+          ${this.getAvatarElement(review.reviewerName, reviewerAvatar, 40)}
           <div>
             <strong>
               ${this.escapeHtml(review.reviewerName)}
@@ -3205,6 +3210,69 @@ renderReviewItem(review) {
       </div>
       ${review.text ? `<p class="review-text">${this.escapeHtml(review.text)}</p>` : ''}
       ${review.service ? `<p class="review-service"><i class="fas fa-tools"></i> ${this.escapeHtml(review.service)}</p>` : ''}
+    </div>
+  `;
+}
+
+getAvatarElement(name, avatarUrl, size = 40) {
+  const initials = name
+    .split(' ')
+    .map(word => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+  
+  const colors = [
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', 
+    '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'
+  ];
+  
+  const colorIndex = name.charCodeAt(0) % colors.length;
+  const bgColor = colors[colorIndex];
+  
+  if (!avatarUrl) {
+    return `
+      <div class="avatar-fallback" style="
+        width: ${size}px;
+        height: ${size}px;
+        border-radius: 50%;
+        background: ${bgColor};
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: ${size * 0.4}px;
+      ">
+        ${initials}
+      </div>
+    `;
+  }
+  
+  return `
+    <img 
+      src="${avatarUrl}" 
+      alt="${this.escapeHtml(name)}"
+      class="reviewer-avatar"
+      style="width: ${size}px; height: ${size}px;"
+      onerror="
+        this.style.display = 'none';
+        this.nextElementSibling.style.display = 'flex';
+      "
+    />
+    <div class="avatar-fallback" style="
+      display: none;
+      width: ${size}px;
+      height: ${size}px;
+      border-radius: 50%;
+      background: ${bgColor};
+      color: white;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: ${size * 0.4}px;
+    ">
+      ${initials}
     </div>
   `;
 }
