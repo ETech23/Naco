@@ -302,6 +302,110 @@ body, html {
   }
 }
 
+/* Location Settings Modal */
+.location-settings-modal {
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.location-status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: var(--bg);
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.status-indicator {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: white;
+}
+
+.status-indicator.gps {
+  background: var(--green);
+}
+
+.status-indicator.ip {
+  background: #f59e0b;
+}
+
+.status-indicator.default {
+  background: var(--muted);
+}
+
+.status-info {
+  flex: 1;
+}
+
+.status-info strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.location-details {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row i {
+  color: var(--green);
+  width: 20px;
+  text-align: center;
+}
+
+.location-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.location-info {
+  background: var(--bg);
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.location-info h4 {
+  margin: 0 0 12px 0;
+  color: var(--text);
+}
+
+.location-info ul {
+  margin: 0 0 12px 0;
+  padding-left: 20px;
+}
+
+.location-info li {
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
 /* Client avatar in bookings */
 .client-info-header {
   display: flex;

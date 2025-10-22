@@ -1,13 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
         <!-- Theme script MUST be first -->
-  <script>
+  <!-- PLACE THIS AS THE VERY FIRST THING INSIDE <head> -->
+<script>
   (function() {
-    const theme = localStorage.getItem('naco_theme') || 'light';
-    document.documentElement.setAttribute('data-theme', theme);
-    window.addEventListener('DOMContentLoaded', () => {
-      document.body.className = theme;
-    });
+    try {
+      // 1) read stored preference (fast, sync)
+      var stored = null;
+      try { stored = localStorage.getItem('naco_theme'); } catch(e){}
+
+      // 2) compute preference cascade: localStorage > prefers-color-scheme > fallback 'dark'
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var theme = stored || (prefersDark ? 'dark' : 'light') || 'dark';
+
+      // 3) set attributes/class ON <html> before first paint
+      var html = document.documentElement;
+      html.setAttribute('data-theme', theme);
+      html.classList.toggle('dark', theme === 'dark');
+
+      // 4) quick critical inline style to ensure background/text match immediately.
+      //    This prevents the white flash while external CSS is still loading.
+      var bg = theme === 'dark' ? '#000' : '#f8faf9';
+      var color = theme === 'dark' ? '#fff' : '#000';
+      var s = document.createElement('style');
+      s.id = 'theme-critical';
+      s.textContent = 'html,body{background:' + bg + ' !important; color:' + color + ' !important; transition:none !important;}';
+      document.head.appendChild(s);
+
+      // 5) Optional: if you want to remove the tiny inline style after full CSS loads:
+      //    keep it if you want absolute no-flash during SPA route changes.
+      //    Otherwise, in your main CSS load handler you can remove it like:
+      // window.addEventListener('load', function(){ var el = document.getElementById('theme-critical'); if(el) el.remove(); });
+
+    } catch (err) {
+      // fail silently — we tried our best before paint
+      console.warn('theme preload failed', err);
+    }
   })();
 </script>
 <head>

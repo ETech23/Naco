@@ -1,16 +1,63 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <!-- Theme script MUST be first -->
-  <script>
-  (function() {
-    const theme = localStorage.getItem('naco_theme') || 'light';
-    document.documentElement.setAttribute('data-theme', theme);
-    window.addEventListener('DOMContentLoaded', () => {
-      document.body.className = theme;
-    });
-  })();
+     <!-- PLACE THIS AS THE VERY FIRST THING INSIDE <head> -->
+<!-- THEME PRELOAD - PLACE FIRST IN <head> -->
+<script>
+(function () {
+  try {
+    // 0) Immediately force dark visuals BEFORE first paint (prevents white flash)
+    var html = document.documentElement;
+    html.setAttribute('data-theme', 'dark');
+    html.classList.add('dark');
+
+    // 1) Critical inline stylesheet (small, safe) applied immediately to avoid flash.
+    //    Use !important so external CSS loading later doesn't repaint the first frame.
+    var critical = document.createElement('style');
+    critical.id = 'theme-critical';
+    critical.textContent = '\
+      html,body { background: #000 !important; color: #fff !important; transition: none !important; } \
+      html.dark, html[data-theme="dark"] { background: #000 !important; color: #fff !important; } \
+      html[data-theme="light"], html.light { background: #f8faf9 !important; color: #000 !important; } \
+      /* prevent CSS animations/transitions from causing flashes on first paint */ \
+      *, *::before, *::after { transition: none !important; animation: none !important; }';
+    document.head.appendChild(critical);
+
+    // 2) Read stored preference synchronously (may throw in some privacy modes)
+    var stored = null;
+    try { stored = localStorage.getItem('naco_theme'); } catch (e) { stored = null; }
+
+    // 3) If user explicitly prefers light, switch to light BEFORE CSS loads
+    if (stored === 'light') {
+      html.setAttribute('data-theme', 'light');
+      html.classList.remove('dark');
+      html.classList.add('light');
+
+      // update critical style to reflect light background immediately
+      critical.textContent = critical.textContent.replace(/background: #000 !important; color: #fff !important;/g, 'background: #f8faf9 !important; color: #000 !important;');
+    } else {
+      // keep dark-first for any other case (stored 'dark', null, or blocked)
+      html.setAttribute('data-theme', 'dark');
+      html.classList.add('dark');
+      html.classList.remove('light');
+    }
+
+    // 4) Optionally remove the critical style after everything is loaded so normal CSS can take over
+    //    If you want absolutely no repaint on SPA route changes, you can keep it.
+    window.addEventListener('load', function () {
+      try {
+        var el = document.getElementById('theme-critical');
+        if (el) el.parentNode.removeChild(el);
+      } catch (e) {}
+    }, { once: true });
+
+  } catch (err) {
+    // silent fallback — we already applied dark via HTML before errors occur
+    console.warn('theme preload error', err);
+  }
+})();
 </script>
+
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   
@@ -77,6 +124,10 @@
           <i class="fas fa-bars"></i>
         </button>-->
         
+        <button id="location-btn" class="header-btn" title="Location Settings">
+  <i class="fas fa-map-marker-alt"></i>
+</button>
+        
         <button id="profile-btn" class="header-icon-btn mobile-only" title="Profile">
           <i class="fas fa-bars"></i>
           <!--  <img id="profile-pic" src="assets/avatar-placeholder.png" alt="Profile" class="profile-avatar">-->
@@ -92,7 +143,7 @@
       <section class="hero card">
         <div class="hero-info">
           <h1>Find trusted artisans & professionals near you</h1>
-          <p class="muted">Quickly connect with verified craftsmen in your city. Premium/verified artisans are featured at the top.</p>
+          <p class="muted">Quickly connect with verified craftsmen in your city. Premium/verified artisans are featured at the top.</p> 
           <div id="quick-cats" class="chips"></div>
         </div>
         <div class="hero-cta">

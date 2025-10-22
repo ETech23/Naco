@@ -5,6 +5,8 @@ import themeManager from './theme.js';
 
 import * as API from './api.js';
 
+import locationManager from './location.js';
+
 class NacoApp {
   constructor() {
     this.state = {
@@ -19,27 +21,30 @@ class NacoApp {
       notifications: [],
       notificationCount: 0,
       isSearchActive: false,
-      isDarkMode: false,
+      isDarkMode: false, // from second version
       isNavOpen: false,
       isProfileDropdownOpen: false,
       deferredPrompt: null,
-      currentLocation: null,
+      currentLocation: null, // location manager populates this
       notificationsPoller: null,
       isLoading: false
     };
-    
-    this.themeManager = themeManager;
+
+    // Managers and utilities
+    this.locationManager = locationManager; // from first version
+    this.themeManager = themeManager;       // from second version
     this.debounceTimers = new Map();
-  
-  // Initialize modal management system
-  this.initializeModalSystem();
-  
-  this.modalStack = [];
-  this.baseZIndex = 1000;
-  this.modalContainer = null;
-  
-  this.init();
-}
+
+    // Modal system setup
+    this.initializeModalSystem();
+    this.modalStack = [];
+    this.baseZIndex = 1000;
+    this.modalContainer = null;
+
+    // Initialize app
+    this.init();
+  }
+
 
 initializeModalSystem() {
   this.modalStack = [];
@@ -303,48 +308,192 @@ setupNetworkMonitoring() {
 
   // Initialization
   async init() {
-  try {
-    this.setState({ isLoading: true });
-    
-    // CRITICAL: Initialize modal system FIRST
-    this.createModalContainer();
-    this.initializeModalCSS();
-    
-    this.setupImageRetryLogic();
-    
-    this.setupNetworkMonitoring();
-    this.debounceTimers = new Map();
-    
-    await this.loadSession();
-    await this.loadArtisans();
-    this.loadFavorites();
-    this.loadTheme();
-    
-    // Setup event listeners
-    this.bindEventListeners();
-    this.bindDynamicEvents();
-    this.bindSearchEvents();
-    
-    // Setup PWA features
-    this.setupInstallPrompt();
-    this.setupServiceWorkerMessageListener();
-    this.registerServiceWorker();
-    
-    if (this.state.user) {
-      this.startNotificationPolling();
+    try {
+      this.setState({ isLoading: true });
+      
+      // Initialize modal system
+      this.createModalContainer();
+      this.initializeModalCSS();
+      
+      this.setupNetworkMonitoring();
+      this.debounceTimers = new Map();
+      
+      await this.loadSession();
+      
+      // Initialize location FIRST (before loading artisans)
+      await this.initializeLocation();
+      
+      await this.loadArtisans();
+      this.loadFavorites();
+      this.loadTheme();
+      
+      // Setup event listeners
+      this.bindEventListeners();
+      this.bindDynamicEvents();
+      this.bindSearchEvents();
+      
+      // Setup PWA features
+      this.setupInstallPrompt();
+      this.setupServiceWorkerMessageListener();
+      this.registerServiceWorker();
+      
+      if (this.state.user) {
+        this.startNotificationPolling();
+      }
+      
+      this.handleNotificationFromURL();
+      
+      this.setState({ isLoading: false });
+      this.render();
+      
+      console.log('App initialized successfully with location:', this.state.currentLocation);
+    } catch (error) {
+      console.error('App initialization failed:', error);
+      this.setState({ isLoading: false });
     }
-    
-    this.handleNotificationFromURL();
-    
-    this.setState({ isLoading: false });
-    this.render();
-    
-    console.log('App initialized successfully');
-  } catch (error) {
-    console.error('App initialization failed:', error);
-    this.setState({ isLoading: false });
   }
-}
+
+  /**
+   * Initialize location with automatic fallback
+   */
+  async initializeLocation() {
+    try {
+      console.log('Initializing location system...');
+      
+      // Check permission status first
+      const permission = await this.locationManager.checkPermission();
+      console.log('Location permission status:', permission);
+
+      // Get location (with automatic GPS -> IP fallback)
+      const location = await this.locationManager.getLocation({
+        enableHighAccuracy: true,
+        timeout: 10000,
+        fallbackToIP: true,
+        showPrompt: false // Don't show custom prompt on init
+      });
+
+      this.setState({ currentLocation: location });
+
+      // Get city name if not provided
+      if (!location.city && location.latitude && location.longitude) {
+        const cityInfo = await this.locationManager.getCityFromCoordinates(
+          location.latitude,
+          location.longitude
+        );
+        
+        if (cityInfo) {
+          location.city = cityInfo.city;
+          location.state = cityInfo.state;
+          this.setState({ currentLocation: location });
+        }
+      }
+
+      // Show toast based on location method
+      if (location.method === 'gps') {
+        this.showToast('📍 Location detected successfully', 'success');
+      } else if (location.method === 'ip') {
+        this.showToast('📍 Using approximate location (IP-based)', 'info');
+      } else {
+        this.showToast('📍 Using default location', 'info');
+      }
+
+      console.log('Location initialized:', location);
+
+    } catch (error) {
+      console.error('Location initialization failed:', error);
+      
+      // Use default location on complete failure
+      const defaultLocation = this.locationManager.getDefaultLocation();
+      this.setState({ currentLocation: defaultLocation });
+      
+      this.showToast('Using default location (Lagos)', 'info');
+    }
+  }
+
+  /**
+   * Request precise location with user prompt
+   */
+  async requestPreciseLocation() {
+    const granted = await this.locationManager.requestPermission(true);
+    
+    if (granted) {
+      try {
+        const location = await this.locationManager.getLocation({
+          enableHighAccuracy: true,
+          fallbackToIP: false
+        });
+        
+        this.setState({ currentLocation: location });
+        this.showToast('📍 Precise location enabled', 'success');
+        
+        // Refresh artisan list with new location
+        await this.loadArtisans();
+        this.render();
+        
+      } catch (error) {
+        this.showToast('Failed to get precise location', 'error');
+      }
+    } else {
+      this.showToast('Location access denied - using IP location', 'info');
+    }
+  }
+
+  /**
+   * Calculate distance using location manager
+   */
+  calculateDistance(artisanLocation) {
+    if (!this.state.currentLocation) {
+      return Math.floor(Math.random() * 20) + 1; // Fallback to random
+    }
+
+    // If artisan has coordinates
+    if (artisanLocation.latitude && artisanLocation.longitude) {
+      return this.locationManager.calculateDistance(
+        this.state.currentLocation.latitude,
+        this.state.currentLocation.longitude,
+        artisanLocation.latitude,
+        artisanLocation.longitude
+      );
+    }
+
+    // Fallback: estimate based on city match
+    if (artisanLocation.city || artisanLocation) {
+      const artisanCity = typeof artisanLocation === 'string' ? 
+        artisanLocation : 
+        artisanLocation.city;
+      
+      const userCity = this.state.currentLocation.city || this.state.selectedCity;
+      
+      if (artisanCity?.toLowerCase() === userCity?.toLowerCase()) {
+        return Math.floor(Math.random() * 5) + 1; // Same city: 1-5km
+      } else {
+        return Math.floor(Math.random() * 40) + 10; // Different city: 10-50km
+      }
+    }
+
+    return Math.floor(Math.random() * 20) + 1; // Default fallback
+  }
+
+  /**
+   * Sort artisans by proximity
+   */
+  sortArtisansByDistance(artisans) {
+    if (!this.state.currentLocation) {
+      return artisans;
+    }
+
+    return artisans.map(artisan => ({
+      ...artisan,
+      distance: this.calculateDistance(artisan.location || artisan)
+    })).sort((a, b) => {
+      // Premium artisans first
+      if (a.premium && !b.premium) return -1;
+      if (!a.premium && b.premium) return 1;
+      
+      // Then by distance
+      return (a.distance || 999) - (b.distance || 999);
+    });
+  }
   
 
   // Event Binding
@@ -368,8 +517,13 @@ document.addEventListener('click', (e) => {
 
 this.$('#view-all-featured')?.addEventListener('click', () => this.showAllFeaturedArtisans());
 
-// Add this method:
-
+// 🔹 Bind location settings button
+  const locationBtn = document.getElementById('location-btn');
+  if (locationBtn) {
+    locationBtn.addEventListener('click', () => {
+      this.openLocationSettings();
+    });
+  }
 
 
 
@@ -4641,6 +4795,110 @@ async openClientProfile(clientId) {
   }
 } **/
     
+    openLocationSettings() {
+  const currentLocation = this.state.currentLocation;
+  const permission = this.locationManager.checkPermission();
+
+  const html = `
+    <div class="location-settings-modal">
+      <h2>Location Settings</h2>
+      
+      <div class="location-status">
+        <div class="status-indicator ${currentLocation.method}">
+          <i class="fas fa-map-marker-alt"></i>
+        </div>
+        <div class="status-info">
+          <strong>Current Location Method</strong>
+          <p class="muted">${this.getLocationMethodLabel(currentLocation.method)}</p>
+        </div>
+      </div>
+
+      <div class="location-details">
+        ${currentLocation.city ? `
+          <div class="detail-row">
+            <i class="fas fa-city"></i>
+            <span>${currentLocation.city}, ${currentLocation.country || ''}</span>
+          </div>
+        ` : ''}
+        
+        <div class="detail-row">
+          <i class="fas fa-crosshairs"></i>
+          <span>Accuracy: ±${Math.round(currentLocation.accuracy || 5000)}m</span>
+        </div>
+        
+        <div class="detail-row">
+          <i class="fas fa-clock"></i>
+          <span>Last updated: ${new Date(currentLocation.timestamp).toLocaleString()}</span>
+        </div>
+      </div>
+
+      <div class="location-actions">
+        ${currentLocation.method !== 'gps' ? `
+          <button id="enable-precise-location" class="btn-primary">
+            <i class="fas fa-crosshairs"></i> Enable Precise Location
+          </button>
+        ` : ''}
+        
+        <button id="refresh-location" class="btn-secondary">
+          <i class="fas fa-sync-alt"></i> Refresh Location
+        </button>
+        
+        <button id="clear-location" class="link-btn">
+          Clear Stored Location
+        </button>
+      </div>
+
+      <div class="location-info">
+        <h4>How we use your location:</h4>
+        <ul>
+          <li>Show nearby artisans</li>
+          <li>Calculate accurate distances</li>
+          <li>Filter by your city</li>
+          <li>Improve search results</li>
+        </ul>
+        <p class="muted">Your location data is never shared with third parties.</p>
+      </div>
+
+      <div style="text-align: center; margin-top: 20px;">
+        <button id="close-location-settings" class="link-btn">Close</button>
+      </div>
+    </div>
+  `;
+
+  this.showModal(html, () => {
+    document.getElementById('enable-precise-location')?.addEventListener('click', async () => {
+      await this.requestPreciseLocation();
+      this.hideModal();
+    });
+
+    document.getElementById('refresh-location')?.addEventListener('click', async () => {
+      await this.initializeLocation();
+      this.showToast('Location refreshed', 'success');
+      this.hideModal();
+    });
+
+    document.getElementById('clear-location')?.addEventListener('click', () => {
+      this.locationManager.clearLocation();
+      this.showToast('Location cleared', 'success');
+      this.hideModal();
+    });
+
+    document.getElementById('close-location-settings')?.addEventListener('click', () => {
+      this.hideModal();
+    });
+  });
+}
+
+getLocationMethodLabel(method) {
+  const labels = {
+    'gps': '✓ Precise GPS Location',
+    'ip': '~ Approximate (IP-based)',
+    'default': '○ Default Location',
+    'manual': '✎ Manual Selection'
+  };
+  return labels[method] || 'Unknown';
+}
+    
     async openBookingDetails(bookingId, options = {}) {
   try {
     console.log('Opening booking details for ID:', bookingId);
@@ -5287,6 +5545,8 @@ bindBookingActionHandlers(booking) {
             this.handleBookingAction(e.target.dataset.id, 'cancelled');
           });
         });
+        
+        
         
         modal.querySelectorAll('.view-booking-details').forEach(btn => {
           btn.addEventListener('click', (e) => {
@@ -7694,6 +7954,8 @@ isModalOpen(type) {
     const roleLabel = this.$('#roleLabel');
     const roleSwitch = this.$('#roleSwitch');
     const profileDropdown = this.$('#profile-dropdown');
+    
+    
 
     if (this.state.user) {
       if (profilePic) {
