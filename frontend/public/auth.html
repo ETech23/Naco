@@ -1,5 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+        <!-- Theme script MUST be first -->
+  <script>
+  (function() {
+    const theme = localStorage.getItem('naco_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    window.addEventListener('DOMContentLoaded', () => {
+      document.body.className = theme;
+    });
+  })();
+</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,43 +17,43 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         /* Modern CSS Variables */
-        :root {
-            /* Dark Mode as default - Normal Black Theme */
-            --golden: #c9b037;
-            --green: #0f7a4a;
-            --green-light: #10955a;
-            --green-dark: #0d5a38;
-            --accent: linear-gradient(135deg, #0f7a4a 0%, #c9b037 100%);
-            --bg: #000000; /* Pure black background */
-            --card: #1a1a1a; /* Dark gray for cards */
-            --text: #ffffff; /* Pure white text */
-            --muted: #888888; /* Medium gray for muted text */
-            --border: #333333; /* Dark gray borders */
-            --border-light: #444444; /* Slightly lighter borders */
-            --radius: 16px;
-            --radius-sm: 8px;
-            --radius-lg: 24px;
-            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3),
-                    0 2px 4px -2px rgb(0 0 0 / 0.3);
-            --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.3),
-                        0 8px 10px -6px rgb(0 0 0 / 0.3);
-            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            --transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
+:root {
+    /* Light Mode as default */
+    --golden: #c9b037;
+    --green: #0f7a4a;
+    --green-light: #10955a;
+    --green-dark: #0d5a38;
+    --accent: linear-gradient(135deg, #0f7a4a 0%, #c9b037 100%);
+    --bg: #f8faf9; /* Light background */
+    --card: #ffffff; /* White cards */
+    --text: #000000; /* Black text */
+    --muted: #666666; /* Dark gray for muted text */
+    --border: #e2e8f0; /* Light borders */
+    --border-light: #f1f5f9;
+    --radius: 16px;
+    --radius-sm: 8px;
+    --radius-lg: 24px;
+    --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1),
+              0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1),
+                 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
-        /* Light Mode Variables */
-        body.light {
-            --bg: #f8faf9;
-            --card: #ffffff;
-            --text: #000000; /* Black text for light mode */
-            --muted: #666666; /* Dark gray for muted text */
-            --border: #e2e8f0;
-            --border-light: #f1f5f9;
-            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1),
-                    0 2px 4px -2px rgb(0 0 0 / 0.1);
-            --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1),
-                        0 8px 10px -6px rgb(0 0 0 / 0.1);
-        }
+/* Dark Mode Variables */
+body.dark {
+    --bg: #000000; /* Pure black background */
+    --card: #1a1a1a; /* Dark gray for cards */
+    --text: #ffffff; /* Pure white text */
+    --muted: #888888; /* Medium gray for muted text */
+    --border: #333333; /* Dark gray borders */
+    --border-light: #444444; /* Slightly lighter borders */
+    --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3),
+              0 2px 4px -2px rgb(0 0 0 / 0.3);
+    --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.3),
+                 0 8px 10px -6px rgb(0 0 0 / 0.3);
+}
 
         /* Completely hide scrollbars across all browsers while maintaining scroll functionality */
         html, body, div, section, main, .scroll-container {
@@ -475,6 +485,12 @@
             </div>
         </form>
     </div>
+    
+    <script type="module">
+  import themeManager from './js/theme.js';
+  // Theme is already applied by the manager
+  console.log('Current theme:', themeManager.getCurrentTheme());
+</script>
 
     <script>
         // Check if user is already logged in

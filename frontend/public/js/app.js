@@ -1,6 +1,8 @@
 // Naco - Modern Artisan Finder App
 // Complete JavaScript implementation with React-like patterns
 
+import themeManager from './theme.js';
+
 import * as API from './api.js';
 
 class NacoApp {
@@ -25,7 +27,8 @@ class NacoApp {
       notificationsPoller: null,
       isLoading: false
     };
-
+    
+    this.themeManager = themeManager;
     this.debounceTimers = new Map();
   
   // Initialize modal management system
@@ -686,7 +689,7 @@ renderNotificationItem(notification) {
   `;
 }
 
-async handleNotificationClick(notificationId) {
+/** async handleNotificationClick(notificationId) {
   try {
     console.log('Handling notification click for ID:', notificationId);
     
@@ -744,6 +747,98 @@ async handleNotificationClick(notificationId) {
       // Navigate to booking details after a short delay
       setTimeout(() => {
         this.openBookingDetails(bookingId);
+      }, 300);
+    } else {
+      console.warn('No booking ID found in notification data:', notification.data);
+    }
+
+  } catch (error) {
+    console.error('Error handling notification click:', error);
+    this.showToast('Error opening notification', 'error');
+  }
+} **/
+
+    async handleNotificationClick(notificationId) {
+  try {
+    console.log('Handling notification click for ID:', notificationId);
+    
+    const notification = this.state.notifications.find(n => {
+      const nId = (n.id || n._id).toString();
+      return nId === notificationId.toString();
+    });
+
+    if (!notification) {
+      console.warn(`Notification with id ${notificationId} not found in state`);
+      return;
+    }
+
+    console.log('Found notification:', notification);
+
+    // Mark as read if unread
+    if (!notification.read) {
+      try {
+        await API.markSingleNotificationRead(notificationId);
+
+        // Update local state immediately
+        const updatedNotifications = this.state.notifications.map(n => {
+          const nId = (n.id || n._id).toString();
+          if (nId === notificationId.toString()) {
+            return { ...n, read: true, readAt: new Date() };
+          }
+          return n;
+        });
+
+        const newUnreadCount = updatedNotifications.filter(n => !n.read).length;
+
+        this.setState({
+          notifications: updatedNotifications,
+          notificationCount: newUnreadCount
+        });
+
+      } catch (error) {
+        console.error('Failed to mark notification as read:', error);
+      }
+    }
+
+    // Handle navigation based on booking ID
+    const bookingId = notification.data?.bookingId || 
+                     notification.data?.booking || 
+                     notification.bookingId;
+                     
+    console.log('Extracted booking ID:', bookingId);
+
+    if (bookingId) {
+      // Close notifications modal
+      this.hideModal();
+      
+      // Small delay to allow modal to close
+      setTimeout(async () => {
+        // Fetch the booking to determine user's role
+        const bookings = await API.getUserBookings();
+        const booking = bookings.find(b => 
+          (b._id || b.id).toString() === bookingId.toString()
+        );
+
+        if (!booking) {
+          this.showToast('Booking not found', 'error');
+          return;
+        }
+
+        const currentUserId = (this.state.user.id || this.state.user._id).toString();
+        const bookerUserId = (booking.bookerUserId || booking.clientId || booking.client?._id || booking.client).toString();
+        const bookedArtisanId = (booking.bookedArtisanId || booking.artisanId || booking.artisan?._id || booking.artisan).toString();
+
+        // Determine which page to open based on user's relationship to booking
+        if (bookerUserId === currentUserId) {
+          // User is the one who placed the booking - open My Bookings
+          this.openMyBookingsWithHighlight(bookingId);
+        } else if (bookedArtisanId === currentUserId) {
+          // User is the artisan being booked - open My Clients
+          this.openMyClientsWithHighlight(bookingId);
+        } else {
+          // Fallback - just show booking details
+          this.openBookingDetails(bookingId);
+        }
       }, 300);
     } else {
       console.warn('No booking ID found in notification data:', notification.data);
@@ -3061,7 +3156,7 @@ async performLogoutCleanup() {
               <span><i class="fas fa-star"></i> ${averageRating} (${reviews.length} reviews)</span>
               <span><i class="fas fa-clock"></i> ${artisan.yearsExperience || 0}+ years</span>
             </div>
-            <div class="profile-rate">${this.formatCurrency(artisan.rate || 0)}</div>
+            <div class="profile-rate">${this.formatCurrency(artisan.rate || 10000)}</div>
           </div>
         </div>
         
@@ -3331,7 +3426,7 @@ openAllReviews(artisan, reviews) {
 />
           <div>
             <strong>${this.escapeHtml(artisan.name)}</strong>
-            <p class="muted">${this.escapeHtml(artisan.skill)} • ${this.formatCurrency(artisan.rate || 5000)}</p>
+            <p class="muted">${this.escapeHtml(artisan.skill)} • ${this.formatCurrency(artisan.rate || 10000)}</p>
           </div>
         </div>
 
@@ -3365,14 +3460,14 @@ openAllReviews(artisan, reviews) {
           <div class="booking-total">
             <div class="total-line">
               <span>Service Fee</span>
-              <span>${this.formatCurrency(artisan.rate || 5000)}</span>
+              <span>${this.formatCurrency(artisan.rate || 10000)}</span>
             </div>
             <div class="total-line">
               <span>Platform Fee</span>
               <span>₦500</span>
             </div>
             <div class="total-line total">
-              <strong>Total: ${this.formatCurrency((artisan.rate || 5000) + 500)}</strong>
+              <strong>Total: ${this.formatCurrency((artisan.rate || 10000) + 500)}</strong>
             </div>
           </div>
 
@@ -3530,7 +3625,7 @@ openAllReviews(artisan, reviews) {
     description: notes,
     service_date: date,
     service_time: time,
-    amount: (artisan.rate || 5000) + 500,
+    amount: (artisan.rate || 10000) + 500,
     payment_method: payment,
     location: location
   };
@@ -3769,6 +3864,342 @@ openAllReviews(artisan, reviews) {
   }
 
     // My Services (for artisans)
+    async openMyClients(options = {}) {
+  if (!this.state.user) {
+    window.location.href = 'auth.html';
+    return;
+  }
+
+  try {
+    const allBookings = await API.getUserBookings();
+    const userId = (this.state.user.id || this.state.user._id).toString();
+    
+    // Get bookings where current user is the booked artisan (providing service)
+    const myClientBookings = allBookings.filter(booking => {
+      const artisanId = (booking.bookedArtisanId || booking.artisanId || booking.artisan?._id || booking.artisan).toString();
+      return artisanId === userId;
+    });
+    
+    console.log('My Clients (as provider):', myClientBookings.length);
+    
+    const html = `
+      <div class="my-clients-modal">
+        <div class="modal-header">
+          <h2>My Clients</h2>
+          <button style="display: none"  class="modal-close-btn" aria-label="Close">&times;</button>
+        </div>
+        <p class="muted">Service requests for you (${myClientBookings.length} total)</p>
+        
+        <div class="client-stats">
+          <div class="stat-item">
+            <strong>${myClientBookings.filter(b => b.status === 'pending').length}</strong>
+            <span>Pending</span>
+          </div>
+          <div class="stat-item">
+            <strong>${myClientBookings.filter(b => b.status === 'confirmed' || b.status === 'in_progress').length}</strong>
+            <span>Active</span>
+          </div>
+          <div class="stat-item">
+            <strong>${myClientBookings.filter(b => b.status === 'pending_confirmation').length}</strong>
+            <span>Awaiting Confirmation</span>
+          </div>
+          <div class="stat-item">
+            <strong>${myClientBookings.filter(b => b.status === 'completed').length}</strong>
+            <span>Completed</span>
+          </div>
+        </div>
+
+        <div class="bookings-list">
+          ${myClientBookings.length ? myClientBookings.map(booking => {
+            const bookingId = (booking._id || booking.id).toString();
+            const isHighlighted = options.highlightId && bookingId === options.highlightId.toString();
+            
+            let statusText = (booking.status || 'pending').toUpperCase();
+            let statusClass = booking.status || 'pending';
+            
+            if (booking.status === 'pending_confirmation') {
+              statusText = 'AWAITING CLIENT CONFIRMATION';
+              statusClass = 'pending-confirmation';
+            }
+            
+            const clientName = booking.client?.name || booking.clientName || 'Unknown Client';
+            const clientAvatar = booking.client?.avatar || booking.client?.photo || null;
+            const serviceDate = booking.service_date || booking.date;
+            const serviceTime = booking.service_time || booking.time;
+            
+            return `
+              <div class="booking-item ${booking.status} ${isHighlighted ? 'highlighted' : ''}" data-booking-id="${bookingId}">
+                <div class="booking-info">
+                  <div class="client-info-header">
+                    <img 
+                      src="${clientAvatar ? this.getOptimizedImageUrl(clientAvatar, { width: 50 }) : '../assets/avatar-placeholder.png'}"
+                      alt="${this.escapeHtml(clientName)}"
+                      class="client-avatar clickable"
+                      data-client-id="${booking.client?._id || booking.bookerUserId}"
+                      onerror="this.src='../assets/avatar-placeholder.png'"
+                    />
+                    <div>
+                      <strong>${this.escapeHtml(clientName)}</strong>
+                      <p class="muted">${this.escapeHtml(booking.service)}</p>
+                    </div>
+                    <span class="status-badge status-${statusClass}">${statusText}</span>
+                  </div>
+                  
+                  <p class="muted">
+                    <i class="fas fa-calendar"></i> ${new Date(serviceDate).toLocaleDateString()} at ${serviceTime}
+                  </p>
+                  <p class="muted">
+                    <i class="fas fa-map-marker-alt"></i> ${this.escapeHtml(booking.location || 'Location TBD')}
+                  </p>
+                  <p class="muted">
+                    <i class="fas fa-money-bill"></i> Amount: ${this.formatCurrency(booking.amount || 0)}
+                  </p>
+                  <p class="muted">
+                    <i class="fas fa-receipt"></i> Reference: ${booking.reference || 'N/A'}
+                  </p>
+                  
+                  ${booking.status === 'pending_confirmation' ? `
+                    <div class="info-notice">
+                      <i class="fas fa-clock"></i> You've marked this job as completed. Waiting for client confirmation.
+                    </div>
+                  ` : ''}
+                </div>
+                
+                <div class="booking-actions">
+                  ${booking.status === 'pending' ? `
+                    <button class="btn-cta accept-booking" data-id="${bookingId}">Accept</button>
+                    <button class="link-btn decline-booking" data-id="${bookingId}">Decline</button>
+                  ` : booking.status === 'confirmed' ? `
+                    <button class="btn-cta start-booking" data-id="${bookingId}">Start Job</button>
+                    <button class="btn-cta complete-booking" data-id="${bookingId}">Mark Complete</button>
+                  ` : booking.status === 'in_progress' ? `
+                    <button class="btn-cta complete-booking" data-id="${bookingId}">Mark Complete</button>
+                  ` : ''}
+                  <button class="link-btn view-booking-details" data-id="${bookingId}">View Details</button>
+                </div>
+              </div>
+            `;
+          }).join('') : '<p class="muted">No client bookings yet.</p>'}
+        </div>
+      </div>
+    `;
+    
+    this.showModal(html, {
+      type: 'my-clients',
+      className: 'clients-overlay',
+      parent: options.parent,
+      callback: (modal) => {
+        // Scroll to highlighted booking
+        if (options.highlightId) {
+          setTimeout(() => {
+            const highlightedBooking = modal.querySelector('.booking-item.highlighted');
+            if (highlightedBooking) {
+              highlightedBooking.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 100);
+        }
+
+        // Client avatar click handler
+        modal.querySelectorAll('.client-avatar.clickable').forEach(avatar => {
+          avatar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const clientId = avatar.dataset.clientId;
+            if (clientId) {
+              this.openClientProfile(clientId);
+            }
+          });
+        });
+
+        // Booking action handlers
+        modal.querySelectorAll('.accept-booking').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.handleBookingAction(e.target.dataset.id, 'confirmed');
+          });
+        });
+
+        modal.querySelectorAll('.decline-booking').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.handleBookingAction(e.target.dataset.id, 'declined');
+          });
+        });
+
+        modal.querySelectorAll('.start-booking').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.handleBookingAction(e.target.dataset.id, 'in_progress');
+          });
+        });
+
+        modal.querySelectorAll('.complete-booking').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (confirm('Are you sure you have completed this job? The client will be asked to confirm.')) {
+              this.handleBookingAction(e.target.dataset.id, 'completed');
+            }
+          });
+        });
+        
+        modal.querySelectorAll('.view-booking-details').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const currentModalId = this.getTopModalId();
+            this.openBookingDetails(e.target.dataset.id, { parent: currentModalId });
+          });
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('Failed to load client bookings:', error);
+    this.showToast('Failed to load bookings', 'error');
+  }
+}
+
+// Add helper method
+async openMyClientsWithHighlight(bookingId) {
+  await this.openMyClients({ highlightId: bookingId });
+}
+
+async openClientProfile(clientId) {
+  try {
+    // Fetch client data
+    const response = await API.api.request(`/users/${clientId}`);
+    const client = response.data?.user || response.user || response;
+    
+    console.log('Client profile data:', client);
+
+    // Get client's booking history with current artisan
+    const allBookings = await API.getUserBookings();
+    const sharedBookings = allBookings.filter(booking => {
+      const bookerId = (booking.bookerUserId || booking.clientId || booking.client?._id || booking.client).toString();
+      return bookerId === clientId.toString();
+    });
+
+    const completedWithMe = sharedBookings.filter(b => b.status === 'completed').length;
+    
+    const clientAvatar = client.avatar ? 
+      this.getOptimizedImageUrl(client.avatar, { width: 200 }) : 
+      '../assets/avatar-placeholder.png';
+
+    const html = `
+      <div class="client-profile-modal">
+        <div class="profile-header">
+          <img 
+            src="${clientAvatar}"
+            alt="${this.escapeHtml(client.name || 'Client')}"
+            class="profile-avatar-large"
+            onerror="this.src='../assets/avatar-placeholder.png'"
+          />
+          <div class="profile-info">
+            <h2>
+              ${this.escapeHtml(client.name || 'Client')}
+              ${this.renderVerificationBadge(client)}
+            </h2>
+            <p class="profile-role">Client</p>
+            ${client.location ? `
+              <p class="profile-location">
+                <i class="fas fa-map-marker-alt"></i> ${this.escapeHtml(client.location)}
+              </p>
+            ` : ''}
+            ${client.phone && client.emailVisibility !== false ? `
+              <p class="profile-contact">
+                <i class="fas fa-phone"></i> ${this.escapeHtml(client.phone)}
+              </p>
+            ` : ''}
+            ${client.email && client.emailVisibility !== false ? `
+              <p class="profile-contact">
+                <i class="fas fa-envelope"></i> ${this.escapeHtml(client.email)}
+              </p>
+            ` : ''}
+          </div>
+        </div>
+
+        <div class="profile-stats">
+          <div class="stat-item">
+            <span class="stat-number">${sharedBookings.length}</span>
+            <span class="stat-label">Total Bookings</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-number">${completedWithMe}</span>
+            <span class="stat-label">Completed</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-number">${sharedBookings.filter(b => b.status === 'pending').length}</span>
+            <span class="stat-label">Pending</span>
+          </div>
+        </div>
+
+        ${client.about ? `
+          <div class="profile-section">
+            <h4>About</h4>
+            <p>${this.escapeHtml(client.about)}</p>
+          </div>
+        ` : ''}
+
+        ${sharedBookings.length > 0 ? `
+          <div class="profile-section">
+            <h4>Booking History</h4>
+            <div class="booking-history-list">
+              ${sharedBookings.slice(0, 5).map(booking => `
+                <div class="history-item">
+                  <div class="history-info">
+                    <strong>${this.escapeHtml(booking.service)}</strong>
+                    <p class="muted">
+                      ${new Date(booking.service_date || booking.date).toLocaleDateString()} • 
+                      ${this.formatCurrency(booking.amount || 0)}
+                    </p>
+                  </div>
+                  <span class="status-badge status-${booking.status}">${booking.status}</span>
+                </div>
+              `).join('')}
+            </div>
+            ${sharedBookings.length > 5 ? `
+              <p class="muted" style="text-align: center; margin-top: 12px;">
+                +${sharedBookings.length - 5} more bookings
+              </p>
+            ` : ''}
+          </div>
+        ` : ''}
+
+        ${client.phone ? `
+          <div class="profile-actions" style="margin-top: 20px;">
+            <button id="contact-client-whatsapp" class="btn-primary" data-phone="${client.phone}">
+              <i class="fab fa-whatsapp"></i> Contact on WhatsApp
+            </button>
+          </div>
+        ` : ''}
+
+        <div style="text-align: center; margin-top: 20px;">
+          <button id="close-client-profile" class="link-btn">Close</button>
+        </div>
+      </div>
+    `;
+
+    this.showModal(html, {
+      type: 'client-profile',
+      callback: (modal) => {
+        modal.querySelector('#close-client-profile')?.addEventListener('click', () => {
+          this.hideModal();
+        });
+
+        modal.querySelector('#contact-client-whatsapp')?.addEventListener('click', (e) => {
+          const phone = e.target.dataset.phone;
+          if (phone) {
+            const cleanPhone = phone.replace(/\D/g, '');
+            const message = `Hi ${client.name}, this is ${this.state.user.name} from Naco.`;
+            window.open(`https://wa.me/234${cleanPhone.replace(/^0/, '')}?text=${encodeURIComponent(message)}`, '_blank');
+          }
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('Failed to load client profile:', error);
+    this.showToast('Failed to load client profile', 'error');
+  }
+}
 /**    async openMyClients(options = {}) {
   if (!this.state.user) {
     this.openLoginModal();
@@ -3915,7 +4346,7 @@ openAllReviews(artisan, reviews) {
   }
 }
 **/
-    async openBookingDetails(bookingId) {
+   /** async openBookingDetails(bookingId) {
   try {
     console.log('Opening booking details for ID:', bookingId);
     
@@ -4039,11 +4470,368 @@ openAllReviews(artisan, reviews) {
     console.error('Failed to load booking details:', error);
     this.showToast('Failed to load booking details', 'error');
   }
-}
+}**/
+
+/** async openBookingDetails(bookingId, options = {}) {
+  try {
+    console.log('Opening booking details for ID:', bookingId);
     
+    const bookings = await API.getUserBookings();
+    const booking = bookings.find(b => {
+      const bId = (b.id || b._id).toString();
+      return bId === bookingId.toString();
+    });
+
+    if (!booking) {
+      this.showToast('Booking not found', 'error');
+      return;
+    }
+
+    const currentUser = this.state.user;
+    const currentUserId = (currentUser.id || currentUser._id).toString();
+    
+    const bookerUserId = (booking.bookerUserId || booking.clientId || booking.client?._id || booking.client).toString();
+    const bookedArtisanId = (booking.bookedArtisanId || booking.artisanId || booking.artisan?._id || booking.artisan).toString();
+    
+    const isBooker = bookerUserId === currentUserId;
+    const isBookedArtisan = bookedArtisanId === currentUserId;
+
+    if (!isBooker && !isBookedArtisan) {
+      this.showToast('You are not authorized to view this booking', 'error');
+      return;
+    }
+
+    const serviceDate = booking.service_date || booking.date;
+    const serviceTime = booking.service_time || booking.time;
+    const clientName = booking.clientName || booking.client?.name || 'Unknown Client';
+    const artisanName = booking.artisanName || booking.artisan?.name || 'Unknown Artisan';
+    
+    // Get client avatar if artisan is viewing
+    const clientAvatar = booking.client?.avatar || booking.client?.photo || null;
+    const clientId = booking.client?._id || booking.bookerUserId;
+
+    let statusText = (booking.status || 'pending').toUpperCase();
+    let statusClass = booking.status || 'pending';
+    
+    if (booking.status === 'pending_confirmation') {
+      statusText = 'AWAITING CLIENT CONFIRMATION';
+      statusClass = 'pending-confirmation';
+    }
+
+    const html = `
+      <div class="booking-details-modal">
+        <h2>Booking Details</h2>
+        
+        <div class="booking-info-card">
+          <div class="booking-ref">
+            <strong>Reference: ${booking.reference || 'N/A'}</strong>
+            <span class="status-badge status-${statusClass}">${statusText}</span>
+          </div>
+          
+          <div class="booking-service">
+            <h4>${this.escapeHtml(booking.service)}</h4>
+            <p class="muted">${this.escapeHtml(booking.description || booking.notes || '')}</p>
+          </div>
+          
+          ${isBookedArtisan && clientAvatar ? `
+            <div class="booking-participant">
+              <img 
+                src="${this.getOptimizedImageUrl(clientAvatar, { width: 50 })}"
+                alt="${this.escapeHtml(clientName)}"
+                class="participant-avatar clickable"
+                data-client-id="${clientId}"
+                onerror="this.src='../assets/avatar-placeholder.png'"
+              />
+              <div>
+                <strong>Client</strong>
+                <p>${this.escapeHtml(clientName)}</p>
+                <p class="muted">Click avatar to view profile</p>
+              </div>
+            </div>
+          ` : `
+            <div class="booking-participant">
+              <div>
+                <strong>${isBooker ? 'Artisan' : 'Client'}</strong>
+                <p>${this.escapeHtml(isBooker ? artisanName : clientName)}</p>
+              </div>
+            </div>
+          `}
+          
+          <div class="booking-details-grid">
+            <div class="detail-item">
+              <i class="fas fa-calendar"></i>
+              <span>Date: <strong>${new Date(serviceDate).toLocaleDateString()}</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-clock"></i>
+              <span>Time: <strong>${serviceTime}</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-map-marker-alt"></i>
+              <span>Location: <strong>${this.escapeHtml(booking.location || 'TBD')}</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-money-bill"></i>
+              <span>Amount: <strong>${this.formatCurrency(booking.amount || 0)}</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-credit-card"></i>
+              <span>Payment: <strong>${this.escapeHtml(booking.payment_method || booking.paymentMethod || 'N/A')}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="booking-actions-modal">
+          ${this.renderBookingActionButtons(booking, isBooker, isBookedArtisan)}
+        </div>
+      </div>
+    `;
+
+    this.showModal(html, {
+      type: 'booking-detail',
+      className: 'booking-details-overlay',
+      preventBackdropClose: false,
+      parent: options.parent,
+      callback: (modal) => {
+        // Client avatar click handler
+        const clientAvatarEl = modal.querySelector('.participant-avatar.clickable');
+        if (clientAvatarEl) {
+          clientAvatarEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const clientId = clientAvatarEl.dataset.clientId;
+            if (clientId) {
+              this.openClientProfile(clientId);
+            }
+          });
+        }
+
+        // Use event delegation to prevent conflicts
+        modal.addEventListener('click', (e) => {
+          e.stopPropagation();
+          
+          const target = e.target;
+          const bookingId = booking.id || booking._id;
+          
+          if (target.id === 'accept-booking-btn') {
+            this.handleBookingAction(bookingId, 'confirmed');
+          } else if (target.id === 'decline-booking-btn') {
+            this.handleBookingAction(bookingId, 'declined');
+          } else if (target.id === 'start-booking-btn') {
+            this.handleBookingAction(bookingId, 'in_progress');
+          } else if (target.id === 'complete-booking-btn') {
+            if (confirm('Are you sure you have completed this job?')) {
+              this.handleBookingAction(bookingId, 'completed');
+            }
+          } else if (target.id === 'confirm-completion-btn') {
+            if (confirm('Are you satisfied with the completed work?')) {
+              this.handleBookingAction(bookingId, 'confirm_completion');
+            }
+          } else if (target.id === 'reject-completion-btn') {
+            if (confirm('Are you sure the work is not completed to your satisfaction?')) {
+              this.handleBookingAction(bookingId, 'reject_completion');
+            }
+          }
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('Failed to load booking details:', error);
+    this.showToast('Failed to load booking details', 'error');
+  }
+} **/
+    
+    async openBookingDetails(bookingId, options = {}) {
+  try {
+    console.log('Opening booking details for ID:', bookingId);
+    
+    const bookings = await API.getUserBookings();
+    const booking = bookings.find(b => {
+      const bId = (b.id || b._id).toString();
+      return bId === bookingId.toString();
+    });
+
+    if (!booking) {
+      this.showToast('Booking not found', 'error');
+      return;
+    }
+
+    const currentUser = this.state.user;
+    const currentUserId = (currentUser.id || currentUser._id).toString();
+    
+    const bookerUserId = (booking.bookerUserId || booking.clientId || booking.client?._id || booking.client).toString();
+    const bookedArtisanId = (booking.bookedArtisanId || booking.artisanId || booking.artisan?._id || booking.artisan).toString();
+    
+    const isBooker = bookerUserId === currentUserId;
+    const isBookedArtisan = bookedArtisanId === currentUserId;
+
+    if (!isBooker && !isBookedArtisan) {
+      this.showToast('You are not authorized to view this booking', 'error');
+      return;
+    }
+
+    const serviceDate = booking.service_date || booking.date;
+    const serviceTime = booking.service_time || booking.time;
+    const clientName = booking.clientName || booking.client?.name || 'Unknown Client';
+    const artisanName = booking.artisanName || booking.artisan?.name || 'Unknown Artisan';
+    
+    const clientAvatar = booking.client?.avatar || booking.client?.photo || null;
+    const clientId = booking.client?._id || booking.bookerUserId;
+
+    let statusText = (booking.status || 'pending').toUpperCase();
+    let statusClass = booking.status || 'pending';
+    
+    if (booking.status === 'pending_confirmation') {
+      statusText = 'AWAITING CLIENT CONFIRMATION';
+      statusClass = 'pending-confirmation';
+    }
+
+    const html = `
+      <div class="booking-details-modal">
+        <h2>Booking Details</h2>
+        
+        <div class="booking-info-card">
+          <div class="booking-ref">
+            <strong>Reference: ${booking.reference || 'N/A'}</strong>
+            <span class="status-badge status-${statusClass}">${statusText}</span>
+          </div>
+          
+          <div class="booking-service">
+            <h4>${this.escapeHtml(booking.service)}</h4>
+            <p class="muted">${this.escapeHtml(booking.description || booking.notes || '')}</p>
+          </div>
+          
+          ${isBookedArtisan && clientAvatar ? `
+            <div class="booking-participant">
+              <img 
+                src="${this.getOptimizedImageUrl(clientAvatar, { width: 50 })}"
+                alt="${this.escapeHtml(clientName)}"
+                class="participant-avatar clickable"
+                data-client-id="${clientId}"
+                onerror="this.src='../assets/avatar-placeholder.png'"
+              />
+              <div>
+                <strong>Client</strong>
+                <p>${this.escapeHtml(clientName)}</p>
+                <p class="muted">Click avatar to view profile</p>
+              </div>
+            </div>
+          ` : `
+            <div class="booking-participant">
+              <div>
+                <strong>${isBooker ? 'Artisan' : 'Client'}</strong>
+                <p>${this.escapeHtml(isBooker ? artisanName : clientName)}</p>
+              </div>
+            </div>
+          `}
+          
+          <div class="booking-details-grid">
+            <div class="detail-item">
+              <i class="fas fa-calendar"></i>
+              <span>Date: <strong>${new Date(serviceDate).toLocaleDateString()}</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-clock"></i>
+              <span>Time: <strong>${serviceTime}</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-map-marker-alt"></i>
+              <span>Location: <strong>${this.escapeHtml(booking.location || 'TBD')}</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-money-bill"></i>
+              <span>Amount: <strong>${this.formatCurrency(booking.amount || 0)}</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fas fa-credit-card"></i>
+              <span>Payment: <strong>${this.escapeHtml(booking.payment_method || booking.paymentMethod || 'N/A')}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="booking-actions-modal">
+          ${this.renderBookingActionButtons(booking, isBooker, isBookedArtisan)}
+        </div>
+      </div>
+    `;
+
+    this.showModal(html, {
+      type: 'booking-detail',
+      className: 'booking-details-overlay',
+      preventBackdropClose: false,
+      parent: options.parent,
+      callback: (modal) => {
+        // Client avatar click handler
+        const clientAvatarEl = modal.querySelector('.participant-avatar.clickable');
+        if (clientAvatarEl) {
+          clientAvatarEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const clientId = clientAvatarEl.dataset.clientId;
+            if (clientId) {
+              this.openClientProfile(clientId);
+            }
+          });
+        }
+
+        // Review button handler - CRITICAL FIX
+        const reviewBtn = modal.querySelector('#review-booking-btn');
+        if (reviewBtn) {
+          reviewBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const bookingId = reviewBtn.dataset.bookingId;
+            const artisanId = reviewBtn.dataset.artisanId;
+            
+            console.log('Review button clicked:', { bookingId, artisanId });
+            
+            if (bookingId && artisanId) {
+              this.openReviewModal(bookingId, artisanId);
+            } else {
+              console.error('Missing booking or artisan ID for review');
+              this.showToast('Unable to open review form', 'error');
+            }
+          });
+        }
+
+        // Other booking action handlers
+        modal.addEventListener('click', (e) => {
+          e.stopPropagation();
+          
+          const target = e.target;
+          const bookingId = booking.id || booking._id;
+          
+          if (target.id === 'accept-booking-btn') {
+            this.handleBookingAction(bookingId, 'confirmed');
+          } else if (target.id === 'decline-booking-btn') {
+            this.handleBookingAction(bookingId, 'declined');
+          } else if (target.id === 'start-booking-btn') {
+            this.handleBookingAction(bookingId, 'in_progress');
+          } else if (target.id === 'complete-booking-btn') {
+            if (confirm('Are you sure you have completed this job?')) {
+              this.handleBookingAction(bookingId, 'completed');
+            }
+          } else if (target.id === 'confirm-completion-btn') {
+            if (confirm('Are you satisfied with the completed work?')) {
+              this.handleBookingAction(bookingId, 'confirm_completion');
+            }
+          } else if (target.id === 'reject-completion-btn') {
+            if (confirm('Are you sure the work is not completed to your satisfaction?')) {
+              this.handleBookingAction(bookingId, 'reject_completion');
+            }
+          }
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('Failed to load booking details:', error);
+    this.showToast('Failed to load booking details', 'error');
+  }
+}
 
 // Helper method to render action buttons
-renderBookingActionButtons(booking, isBooker, isBookedArtisan) {
+/**renderBookingActionButtons(booking, isBooker, isBookedArtisan) {
   const status = booking.status || 'pending';
   let buttons = '';
 
@@ -4104,6 +4892,91 @@ renderBookingActionButtons(booking, isBooker, isBookedArtisan) {
         <button id="review-booking-btn" class="btn-primary" data-id="${booking.id || booking._id}" data-artisan="${booking.artisanId || booking.bookedArtisanId}">
           <i class="fas fa-star"></i> Leave Review
         </button>
+      `;
+    }
+  }
+
+  return buttons;
+} **/
+
+renderBookingActionButtons(booking, isBooker, isBookedArtisan) {
+  const status = booking.status || 'pending';
+  const bookingId = booking.id || booking._id;
+  const artisanId = booking.artisanId || booking.bookedArtisanId || booking.artisan?._id || booking.artisan;
+  
+  let buttons = '';
+
+  if (isBookedArtisan) {
+    // Artisan actions
+    if (status === 'pending') {
+      buttons += `
+        <button id="accept-booking-btn" class="btn-primary" data-id="${bookingId}">
+          <i class="fas fa-check"></i> Accept Booking
+        </button>
+        <button id="decline-booking-btn" class="link-btn" data-id="${bookingId}">
+          Decline
+        </button>
+      `;
+    } else if (status === 'confirmed') {
+      buttons += `
+        <button id="start-booking-btn" class="btn-primary" data-id="${bookingId}">
+          <i class="fas fa-play"></i> Start Job
+        </button>
+        <button id="complete-booking-btn" class="btn-secondary" data-id="${bookingId}">
+          <i class="fas fa-check-circle"></i> Mark as Completed
+        </button>
+      `;
+    } else if (status === 'in_progress') {
+      buttons += `
+        <button id="complete-booking-btn" class="btn-primary" data-id="${bookingId}">
+          <i class="fas fa-check-circle"></i> Mark as Completed
+        </button>
+      `;
+    } else if (status === 'pending_confirmation') {
+      buttons += `
+        <div class="waiting-section">
+          <p class="muted">
+            <i class="fas fa-clock"></i> Waiting for client to confirm job completion...
+          </p>
+        </div>
+      `;
+    } else if (status === 'completed') {
+      buttons += `
+        <div class="completed-section">
+          <p style="color: var(--green);">
+            <i class="fas fa-check-circle"></i> Job completed and confirmed by client
+          </p>
+        </div>
+      `;
+    }
+  }
+
+  if (isBooker) {
+    // Client actions
+    if (status === 'pending_confirmation') {
+      buttons += `
+        <div class="confirmation-section">
+          <h4>Artisan has marked this job as completed. Please confirm:</h4>
+          <div style="display: flex; gap: 12px; margin-top: 16px;">
+            <button id="confirm-completion-btn" class="btn-primary" data-id="${bookingId}">
+              <i class="fas fa-check"></i> Confirm Completion
+            </button>
+            <button id="reject-completion-btn" class="link-btn" data-id="${bookingId}">
+              <i class="fas fa-times"></i> Reject - Work Not Complete
+            </button>
+          </div>
+        </div>
+      `;
+    } else if (status === 'completed') {
+      buttons += `
+        <div class="completed-actions">
+          <p style="color: var(--green); margin-bottom: 16px;">
+            <i class="fas fa-check-circle"></i> Job completed successfully!
+          </p>
+          <button id="review-booking-btn" class="btn-primary" data-booking-id="${bookingId}" data-artisan-id="${artisanId}">
+            <i class="fas fa-star"></i> Leave Review
+          </button>
+        </div>
       `;
     }
   }
@@ -4281,6 +5154,185 @@ bindBookingActionHandlers(booking) {
 
 
   // User Bookings
+  async openMyBookings(options = {}) {
+  if (!this.state.user) {
+    window.location.href = 'auth.html';
+    return;
+  }
+
+  try {
+    const allBookings = await API.getUserBookings();
+    
+    // Get ALL bookings where current user is the booker (initiated the booking)
+    const userId = (this.state.user.id || this.state.user._id).toString();
+    const myBookings = allBookings.filter(booking => {
+      const bookerId = (booking.bookerUserId || booking.clientId || booking.client?._id || booking.client).toString();
+      return bookerId === userId;
+    });
+    
+    console.log('My Bookings (as requester):', myBookings.length);
+    
+    const html = `
+      <div class="my-bookings-modal">
+        <div class="modal-header">
+          <h2>My Bookings</h2>
+          <button style="display: none" class="modal-close-btn" aria-label="Close">&times;</button>
+        </div>
+        <p class="muted">Service requests you've placed (${myBookings.length} total)</p>
+        
+        <div class="booking-stats">
+          <div class="stat-item">
+            <strong>${myBookings.filter(b => b.status === 'pending').length}</strong>
+            <span>Pending</span>
+          </div>
+          <div class="stat-item">
+            <strong>${myBookings.filter(b => b.status === 'confirmed' || b.status === 'in_progress').length}</strong>
+            <span>Active</span>
+          </div>
+          <div class="stat-item">
+            <strong>${myBookings.filter(b => b.status === 'pending_confirmation').length}</strong>
+            <span>Awaiting Confirmation</span>
+          </div>
+          <div class="stat-item">
+            <strong>${myBookings.filter(b => b.status === 'completed').length}</strong>
+            <span>Completed</span>
+          </div>
+        </div>
+
+        <div class="bookings-list">
+          ${myBookings.length ? myBookings.map(booking => {
+            const bookingId = (booking._id || booking.id).toString();
+            const isHighlighted = options.highlightId && bookingId === options.highlightId.toString();
+            
+            let statusText = (booking.status || 'pending').toUpperCase();
+            let statusClass = booking.status || 'pending';
+            
+            if (booking.status === 'pending_confirmation') {
+              statusText = 'AWAITING YOUR CONFIRMATION';
+              statusClass = 'pending-confirmation';
+            }
+            
+            const artisanName = booking.artisan?.name || booking.artisanName || 'Unknown Artisan';
+            const serviceDate = booking.service_date || booking.date;
+            const serviceTime = booking.service_time || booking.time;
+            
+            return `
+              <div class="booking-item ${booking.status} ${isHighlighted ? 'highlighted' : ''}" data-booking-id="${bookingId}">
+                <div class="booking-info">
+                  <div class="booking-header-row">
+                    <strong>${this.escapeHtml(booking.service)}</strong>
+                    <span class="status-badge status-${statusClass}">${statusText}</span>
+                  </div>
+                  <p class="muted">with ${this.escapeHtml(artisanName)}</p>
+                  <p class="muted">
+                    <i class="fas fa-calendar"></i> ${new Date(serviceDate).toLocaleDateString()} at ${serviceTime}
+                  </p>
+                  <p class="muted">
+                    <i class="fas fa-map-marker-alt"></i> ${this.escapeHtml(booking.location || 'Location TBD')}
+                  </p>
+                  <p class="muted">
+                    <i class="fas fa-money-bill"></i> Amount: ${this.formatCurrency(booking.amount || 0)}
+                  </p>
+                  <p class="muted">
+                    <i class="fas fa-receipt"></i> Reference: ${booking.reference || 'N/A'}
+                  </p>
+                  
+                  ${booking.status === 'pending_confirmation' ? `
+                    <div class="urgent-notice">
+                      <i class="fas fa-exclamation-triangle"></i>
+                      <strong>Action Required:</strong> Artisan has marked this job as completed. Please review and confirm.
+                    </div>
+                  ` : ''}
+                </div>
+                
+                <div class="booking-actions">
+                  ${booking.status === 'pending' ? `
+                    <button class="link-btn cancel-booking" data-id="${bookingId}">Cancel</button>
+                  ` : ''}
+                  ${booking.status === 'pending_confirmation' ? `
+                    <button class="btn-cta confirm-completion-btn" data-id="${bookingId}">Confirm Completion</button>
+                    <button class="link-btn reject-completion-btn" data-id="${bookingId}">Reject</button>
+                  ` : ''}
+                  ${booking.status === 'completed' ? `
+                    <button class="btn-cta review-booking" data-id="${bookingId}" data-artisan="${booking.artisan?._id || booking.artisan}">Leave Review</button>
+                  ` : ''}
+                  <button class="link-btn view-booking-details" data-id="${bookingId}">View Details</button>
+                </div>
+              </div>
+            `;
+          }).join('') : '<p class="muted">No bookings yet. Start by booking an artisan!</p>'}
+        </div>
+      </div>
+    `;
+    
+    this.showModal(html, {
+      type: 'my-bookings',
+      className: 'bookings-overlay',
+      parent: options.parent,
+      callback: (modal) => {
+        // Scroll to highlighted booking if exists
+        if (options.highlightId) {
+          setTimeout(() => {
+            const highlightedBooking = modal.querySelector('.booking-item.highlighted');
+            if (highlightedBooking) {
+              highlightedBooking.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 100);
+        }
+
+        // Bind event handlers
+        modal.querySelectorAll('.cancel-booking').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.handleBookingAction(e.target.dataset.id, 'cancelled');
+          });
+        });
+        
+        modal.querySelectorAll('.view-booking-details').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const currentModalId = this.getTopModalId();
+            this.openBookingDetails(e.target.dataset.id, { parent: currentModalId });
+          });
+        });
+
+        modal.querySelectorAll('.review-booking').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.openReviewModal(e.target.dataset.id, e.target.dataset.artisan);
+          });
+        });
+
+        modal.querySelectorAll('.confirm-completion-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (confirm('Are you satisfied with the completed work?')) {
+              this.handleBookingAction(e.target.dataset.id, 'confirm_completion');
+            }
+          });
+        });
+
+        modal.querySelectorAll('.reject-completion-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (confirm('Are you sure the work is not completed to your satisfaction? This will return the booking to active status.')) {
+              this.handleBookingAction(e.target.dataset.id, 'reject_completion');
+            }
+          });
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('Failed to load bookings:', error);
+    this.showToast('Failed to load bookings', 'error');
+  }
+}
+
+// Add helper method for opening with highlight
+async openMyBookingsWithHighlight(bookingId) {
+  await this.openMyBookings({ highlightId: bookingId });
+}
 /** async openMyBookings(options = {}) {
   if (!this.state.user) {
     this.openLoginModal();
@@ -4406,7 +5458,7 @@ bindBookingActionHandlers(booking) {
 
 
 
-    async handleBookingAction(bookingId, action) {
+  /**  async handleBookingAction(bookingId, action) {
   if (!this.state.user) {
     window.location.href = 'auth.html';
     return;
@@ -4510,6 +5562,127 @@ bindBookingActionHandlers(booking) {
   } catch (error) {
     console.error('Failed to update booking:', error);
     this.showToast(error.message || 'Failed to update booking', 'error');
+    throw error;
+  }
+} **/
+
+    async handleBookingAction(bookingId, action) {
+  if (!this.state.user) {
+    window.location.href = 'auth.html';
+    return;
+  }
+
+  try {
+    console.log('Handling booking action:', { bookingId, action });
+
+    const bookings = await API.getUserBookings();
+    const booking = bookings.find(b => (b._id || b.id).toString() === bookingId.toString());
+    
+    if (!booking) {
+      throw new Error('Booking not found');
+    }
+
+    const currentUserId = (this.state.user.id || this.state.user._id).toString();
+    const bookerUserId = (booking.bookerUserId || booking.clientId || booking.client?._id || booking.client).toString();
+    const bookedArtisanId = (booking.bookedArtisanId || booking.artisanId || booking.artisan?._id || booking.artisan).toString();
+    
+    const isServiceRequester = bookerUserId === currentUserId;
+    const isServiceProvider = bookedArtisanId === currentUserId;
+
+    if (!isServiceRequester && !isServiceProvider) {
+      throw new Error('You are not part of this booking');
+    }
+
+    // Validate actions based on user relationship and booking status
+    const currentStatus = booking.status;
+    let allowedActions = [];
+
+    if (isServiceProvider) {
+      // Actions allowed for service provider (artisan)
+      switch (currentStatus) {
+        case 'pending':
+          allowedActions = ['confirmed', 'declined'];
+          break;
+        case 'confirmed':
+          allowedActions = ['in_progress', 'completed'];
+          break;
+        case 'in_progress':
+          allowedActions = ['completed'];
+          break;
+        default:
+          allowedActions = ['cancelled'];
+      }
+    }
+
+    if (isServiceRequester) {
+      // Actions allowed for service requester (client)
+      switch (currentStatus) {
+        case 'pending':
+          allowedActions = ['cancelled'];
+          break;
+        case 'pending_confirmation':
+          allowedActions = ['confirm_completion', 'reject_completion'];
+          break;
+        default:
+          allowedActions = ['cancelled'];
+      }
+    }
+
+    if (!allowedActions.includes(action)) {
+      throw new Error(`Action "${action}" not allowed for ${isServiceProvider ? 'service provider' : 'service requester'} in status "${currentStatus}"`);
+    }
+
+    // Show loading state
+    const actionButton = document.querySelector(`[data-id="${bookingId}"]`);
+    const originalText = actionButton?.innerHTML;
+    if (actionButton) {
+      actionButton.disabled = true;
+      actionButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+    }
+
+    // Call API with the correct action
+    const updatedBooking = await API.updateBookingStatus(bookingId, action);
+    
+    console.log('Booking updated successfully:', updatedBooking);
+
+    // Success messages
+    const messages = {
+      confirmed: 'Booking accepted successfully',
+      declined: 'Booking declined',
+      in_progress: 'Job started',
+      completed: 'Job marked as completed. Waiting for client confirmation.',
+      confirm_completion: 'Job completion confirmed successfully',
+      reject_completion: 'Completion rejected. Artisan has been notified.',
+      cancelled: 'Booking cancelled'
+    };
+
+    this.showToast(messages[action] || 'Booking updated', 'success');
+
+    // Close current modal
+    this.hideModal();
+
+    // Refresh the appropriate view after a short delay with highlight
+    setTimeout(() => {
+      if (isServiceProvider) {
+        this.openMyClientsWithHighlight(bookingId);
+      } else if (isServiceRequester) {
+        this.openMyBookingsWithHighlight(bookingId);
+      }
+    }, 500);
+
+    return updatedBooking;
+    
+  } catch (error) {
+    console.error('Failed to update booking:', error);
+    this.showToast(error.message || 'Failed to update booking', 'error');
+    
+    // Restore button state
+    const actionButton = document.querySelector(`[data-id="${bookingId}"]`);
+    if (actionButton && originalText) {
+      actionButton.disabled = false;
+      actionButton.innerHTML = originalText;
+    }
+    
     throw error;
   }
 }
@@ -5476,7 +6649,7 @@ openBookingDetailsOverlay(bookingId) {
     return icons[type] || icons.default;
   }
 
-  async openReviewModal(bookingId, artisanId) {
+ /** async openReviewModal(bookingId, artisanId) {
     try {
       const artisan = await API.getFullArtisanData(artisanId);
       
@@ -5574,7 +6747,265 @@ openBookingDetailsOverlay(bookingId) {
       console.error('Failed to open review modal:', error);
       this.showToast('Failed to load review form', 'error');
     }
+  }**/
+  
+  async openReviewModal(bookingId, artisanId) {
+  if (!this.state.user) {
+    window.location.href = 'auth.html';
+    return;
   }
+
+  try {
+    console.log('Opening review modal for:', { bookingId, artisanId });
+
+    // Fetch artisan data
+    const artisan = await API.getFullArtisanData(artisanId);
+    
+    // Verify booking exists and is completed
+    const bookings = await API.getUserBookings();
+    const booking = bookings.find(b => (b._id || b.id).toString() === bookingId.toString());
+    
+    if (!booking) {
+      this.showToast('Booking not found', 'error');
+      return;
+    }
+
+    if (booking.status !== 'completed') {
+      this.showToast('You can only review completed bookings', 'warning');
+      return;
+    }
+
+    // Check if review already exists
+    try {
+      const existingReviews = await API.getReviewsForArtisan(artisanId);
+      const alreadyReviewed = existingReviews.some(review => {
+        const reviewBookingId = review.bookingId || review.booking?._id || review.booking;
+        return reviewBookingId && reviewBookingId.toString() === bookingId.toString();
+      });
+
+      if (alreadyReviewed) {
+        this.showToast('You have already reviewed this booking', 'info');
+        return;
+      }
+    } catch (error) {
+      console.warn('Could not check existing reviews:', error);
+    }
+
+    const artisanAvatar = artisan.photo ? 
+      this.getOptimizedImageUrl(artisan.photo, { width: 100 }) : 
+      '../assets/avatar-placeholder.png';
+    
+    const html = `
+      <div class="review-modal">
+        <h2>Review ${this.escapeHtml(artisan.name)}</h2>
+        
+        <div class="review-artisan-info">
+          <img 
+            src="${artisanAvatar}"
+            alt="${this.escapeHtml(artisan.name)}"
+            class="review-artisan-avatar"
+            onerror="this.src='../assets/avatar-placeholder.png'"
+          />
+          <div>
+            <strong>${this.escapeHtml(artisan.name)}</strong>
+            <p class="muted">${this.escapeHtml(artisan.skill)}</p>
+            <p class="muted">${this.escapeHtml(booking.service)}</p>
+          </div>
+        </div>
+
+        <form id="review-form" class="review-form">
+          <div class="form-group">
+            <label>How would you rate this service?</label>
+            <div class="star-rating" id="star-rating">
+              ${[1, 2, 3, 4, 5].map(i => `
+                <i class="fas fa-star star-btn" data-rating="${i}" title="${i} star${i > 1 ? 's' : ''}"></i>
+              `).join('')}
+            </div>
+            <input type="hidden" id="review-rating" name="rating" required>
+            <small class="rating-text" id="rating-text">Click to rate</small>
+          </div>
+          
+          <div class="form-group">
+            <label for="review-text">Your Review</label>
+            <textarea 
+              id="review-text" 
+              name="text"
+              placeholder="Share your experience with this artisan..."
+              rows="5" 
+              required
+              minlength="10"
+            ></textarea>
+            <small class="muted">Minimum 10 characters</small>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" id="submit-review" class="btn-primary" disabled>
+              <i class="fas fa-star"></i> Submit Review
+            </button>
+            <button type="button" id="cancel-review" class="link-btn">Cancel</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    this.showModal(html, {
+      type: 'review-modal',
+      callback: (modal) => {
+        const stars = modal.querySelectorAll('.star-btn');
+        const ratingInput = modal.querySelector('#review-rating');
+        const ratingText = modal.querySelector('#rating-text');
+        const reviewTextarea = modal.querySelector('#review-text');
+        const submitBtn = modal.querySelector('#submit-review');
+        
+        let selectedRating = 0;
+
+        // Star rating functionality
+        stars.forEach((star, index) => {
+          // Hover effect
+          star.addEventListener('mouseenter', () => {
+            stars.forEach((s, i) => {
+              if (i <= index) {
+                s.style.color = '#ffd700';
+                s.classList.add('hovered');
+              } else {
+                s.style.color = selectedRating > i ? '#ffd700' : '#ddd';
+                s.classList.remove('hovered');
+              }
+            });
+          });
+
+          // Click to select
+          star.addEventListener('click', () => {
+            const rating = parseInt(star.dataset.rating);
+            selectedRating = rating;
+            ratingInput.value = rating;
+            
+            // Update stars
+            stars.forEach((s, i) => {
+              if (i < rating) {
+                s.style.color = '#ffd700';
+                s.classList.add('selected');
+              } else {
+                s.style.color = '#ddd';
+                s.classList.remove('selected');
+              }
+            });
+
+            // Update text
+            const ratingTexts = [
+              '',
+              'Poor - Not satisfied',
+              'Fair - Below expectations',
+              'Good - Meets expectations',
+              'Very Good - Above expectations',
+              'Excellent - Exceptional service'
+            ];
+            ratingText.textContent = ratingTexts[rating];
+            ratingText.style.color = rating >= 4 ? '#16a34a' : rating >= 3 ? '#eab308' : '#ef4444';
+
+            // Check if form is valid
+            this.validateReviewForm(modal);
+          });
+        });
+
+        // Reset stars on mouse leave
+        const starRating = modal.querySelector('#star-rating');
+        starRating.addEventListener('mouseleave', () => {
+          stars.forEach((s, i) => {
+            if (i < selectedRating) {
+              s.style.color = '#ffd700';
+            } else {
+              s.style.color = '#ddd';
+            }
+            s.classList.remove('hovered');
+          });
+        });
+
+        // Textarea validation
+        reviewTextarea.addEventListener('input', () => {
+          this.validateReviewForm(modal);
+        });
+
+        // Submit button
+        submitBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const rating = parseInt(ratingInput.value);
+          const text = reviewTextarea.value.trim();
+
+          if (!rating || rating < 1 || rating > 5) {
+            this.showToast('Please select a rating', 'error');
+            return;
+          }
+
+          if (!text || text.length < 10) {
+            this.showToast('Review must be at least 10 characters', 'error');
+            return;
+          }
+
+          // Disable submit button
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+
+          try {
+            await API.createReview({
+              bookingId,
+              artisanId,
+              rating,
+              text
+            });
+            
+            this.hideModal();
+            this.showToast('Review submitted successfully!', 'success');
+            
+            // Refresh the current view
+            setTimeout(() => {
+              this.openMyBookingsWithHighlight(bookingId);
+            }, 500);
+            
+          } catch (error) {
+            console.error('Review submission failed:', error);
+            this.showToast(error.message || 'Failed to submit review', 'error');
+            
+            // Re-enable submit button
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-star"></i> Submit Review';
+          }
+        });
+
+        // Cancel button
+        modal.querySelector('#cancel-review')?.addEventListener('click', () => {
+          this.hideModal();
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('Failed to open review modal:', error);
+    this.showToast('Failed to load review form', 'error');
+  }
+}
+
+// Helper method to validate review form
+validateReviewForm(modal) {
+  const ratingInput = modal.querySelector('#review-rating');
+  const reviewTextarea = modal.querySelector('#review-text');
+  const submitBtn = modal.querySelector('#submit-review');
+  
+  const rating = parseInt(ratingInput?.value || 0);
+  const text = reviewTextarea?.value?.trim() || '';
+  
+  const isValid = rating >= 1 && rating <= 5 && text.length >= 10;
+  
+  if (submitBtn) {
+    submitBtn.disabled = !isValid;
+    submitBtn.style.opacity = isValid ? '1' : '0.5';
+    submitBtn.style.cursor = isValid ? 'pointer' : 'not-allowed';
+  }
+  
+  return isValid;
+}
 
   // Premium Upgrade
   openPremiumUpgrade() {
@@ -5716,7 +7147,7 @@ openBookingDetailsOverlay(bookingId) {
                 <div class="featured-rating">
                   <i class="fas fa-star"></i> ${artisan.averageRating} (${artisan.reviewCount} reviews)
                 </div>
-                <div class="featured-rate">${this.formatCurrency(artisan.rate || 0)}</div>
+                <div class="featured-rate">${this.formatCurrency(artisan.rate || 10000)}</div>
                 <hr>
                 <br>
               </div>
@@ -5758,25 +7189,21 @@ openBookingDetailsOverlay(bookingId) {
 
   // Theme Management
   loadTheme() {
-    const savedTheme = localStorage.getItem('naco_theme') || 
-                      (this.state.user?.theme) || 
-                      'light';
-    
-    this.setState({ isDarkMode: savedTheme === 'dark' });
-    document.body.classList.toggle('dark', savedTheme === 'dark');
+    // Theme is already loaded by the global manager
+    // Just sync the UI state
+    const currentTheme = this.themeManager.getCurrentTheme();
+    this.setState({ isDarkMode: currentTheme === 'dark' });
   }
 
   toggleTheme() {
-    const newTheme = this.state.isDarkMode ? 'dark' : 'light';
-    this.setState({ isDarkMode: !this.state.isDarkMode });
-    document.body.classList.toggle('dark', !this.state.isDarkMode);
-    localStorage.setItem('naco_theme', newTheme);
-
+    const newTheme = this.themeManager.toggleTheme();
+    this.setState({ isDarkMode: newTheme === 'dark' });
+    this.showToast(`Switched to ${newTheme} mode`, 'success');
+    
+    // Update user preference in backend if logged in
     if (this.state.user) {
       API.updateUserProfile(this.state.user.id, { theme: newTheme }).catch(console.error);
     }
-
-    this.showToast(`Switched to ${newTheme} mode`, 'success');
   }
 
   // Session Management

@@ -1,5 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+    <!-- Theme script MUST be first -->
+  <script>
+  (function() {
+    const theme = localStorage.getItem('naco_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    window.addEventListener('DOMContentLoaded', () => {
+      document.body.className = theme;
+    });
+  })();
+</script>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,26 +18,27 @@
   <style>
     /* Same CSS variables */
     :root {
-      --golden: #c9b037;
-      --green: #0f7a4a;
-      --green-light: #10955a;
-      --bg: #000000;
-      --card: #1a1a1a;
-      --text: #ffffff;
-      --muted: #888888;
-      --border: #333333;
-      --radius: 16px;
-      --radius-sm: 8px;
-      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
-    }
+  --golden: #c9b037;
+  --green: #0f7a4a;
+  --green-light: #10955a;
+  --bg: #f8faf9;
+  --card: #ffffff;
+  --text: #000000;
+  --muted: #666666;
+  --border: #e2e8f0;
+  --radius: 16px;
+  --radius-sm: 8px;
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
 
-    body.light {
-      --bg: #f8faf9;
-      --card: #ffffff;
-      --text: #000000;
-      --muted: #666666;
-      --border: #e2e8f0;
-    }
+body.dark {
+  --bg: #000000;
+  --card: #1a1a1a;
+  --text: #ffffff;
+  --muted: #888888;
+  --border: #333333;
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
+}
 
     * {
       box-sizing: border-box;
@@ -207,6 +218,12 @@
       <div id="favorites-list"></div>
     </div>
   </div>
+  
+  <script type="module">
+  import themeManager from './js/theme.js';
+  // Theme is already applied by the manager
+  console.log('Current theme:', themeManager.getCurrentTheme());
+</script>
 
   <script type="module">
     import * as API from './js/api.js';

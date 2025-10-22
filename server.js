@@ -74,7 +74,7 @@ const artisanProfileSchema = new mongoose.Schema({
   skill: { type: String, default: 'General Services' },
   specialties: [{ type: String }],
   description: { type: String, default: '' },
-  rate: { type: Number, default: 5000 },
+  rate: { type: Number, default: 10000 },
   rating: { type: Number, default: 0 },
   years_experience: { type: Number, default: 1 },
   availability: { type: String, enum: ['Available', 'Busy', 'Unavailable'], default: 'Available' },
@@ -342,7 +342,7 @@ app.post('/auth/register', async (req, res) => {
       const artisanProfile = new ArtisanProfile({
         user: user._id,
         skill: skill || 'General Services',
-        rate: rate || 5000,
+        rate: rate || 10000,
         availability: 'Available',
         rating: 0,
         completed_jobs: 0,
@@ -464,6 +464,43 @@ app.get('/auth/user', authenticateToken, async (req, res) => {
   }
 });
 
+// Get user profile by ID (for artisans viewing client profiles)
+app.get('/users/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    const user = await User.findById(id).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Only return public information
+    const publicProfile = {
+      id: user._id,
+      name: user.name,
+      avatar: user.avatar,
+      location: user.location,
+      role: user.role,
+      premium: user.premium,
+      about: user.about,
+      // Conditionally include contact info based on privacy settings
+     /** email: user.emailVisibility !== false ? user.email : null,
+      phone: user.emailVisibility !== false ? user.phone : null, **/
+      emailVisibility: user.emailVisibility
+    };
+
+    res.json(publicProfile);
+  } catch (error) {
+    console.error('Failed to get user profile:', error);
+    res.status(500).json({ error: 'Failed to get user profile' });
+}
+});
+
 // User Profile Routes
 
 // Update user profile
@@ -551,7 +588,7 @@ app.put('/users/:id/role', authenticateToken, async (req, res) => {
         const artisanProfile = new ArtisanProfile({
           user: userId,
           skill: 'General Services',
-          rate: 5000,
+          rate: 10000,
           availability: 'Available',
           rating: 0,
           completed_jobs: 0
@@ -842,42 +879,77 @@ app.get('/bookings', authenticateToken, async (req, res) => {
         { bookedArtisanId: req.user.id }
       ]
     })
-    .populate('client', 'name email phone')
-    .populate('artisan', 'name email skill phone')
+    .populate({
+      path: 'client',
+      select: 'name email phone avatar photo premium'
+    })
+    .populate({
+      path: 'artisan',
+      select: 'name email skill phone avatar photo premium'
+    })
     .sort({ createdAt: -1 });
     
     // Normalize the response to match frontend expectations
-    const normalizedBookings = bookings.map(booking => ({
-      id: booking._id,
-      _id: booking._id,
-      service: booking.service,
-      description: booking.description,
-      date: booking.service_date,
-      service_date: booking.service_date,
-      time: booking.service_time,
-      service_time: booking.service_time,
-      amount: booking.amount,
-      status: booking.status,
-      reference: booking.reference,
-      location: booking.location,
-      payment_method: booking.payment_method,
-      paymentMethod: booking.payment_method,
+    const normalizedBookings = bookings.map(booking => {
+      // Get client data
+      const clientData = booking.client || {};
+      const clientAvatar = clientData.avatar || clientData.photo || null;
       
-      // Client/Booker information
-      client: booking.client,
-      clientId: booking.client._id,
-      clientName: booking.client.name,
-      bookerUserId: booking.bookerUserId,
-      
-      // Artisan information
-      artisan: booking.artisan,
-      artisanId: booking.artisan._id,
-      artisanName: booking.artisan.name,
-      bookedArtisanId: booking.bookedArtisanId,
-      
-      createdAt: booking.createdAt,
-      updatedAt: booking.updatedAt
-    }));
+      // Get artisan data
+      const artisanData = booking.artisan || {};
+      const artisanAvatar = artisanData.avatar || artisanData.photo || null;
+
+      return {
+        id: booking._id,
+        _id: booking._id,
+        service: booking.service,
+        description: booking.description,
+        date: booking.service_date,
+        service_date: booking.service_date,
+        time: booking.service_time,
+        service_time: booking.service_time,
+        amount: booking.amount,
+        status: booking.status,
+        reference: booking.reference,
+        location: booking.location,
+        payment_method: booking.payment_method,
+        paymentMethod: booking.payment_method,
+        
+        // Client/Booker information with avatar
+        client: {
+          _id: clientData._id,
+          name: clientData.name || 'Unknown Client',
+          email: clientData.email,
+          phone: clientData.phone,
+          avatar: clientAvatar,
+          photo: clientAvatar, // Provide both for compatibility
+          premium: clientData.premium || false
+        },
+        clientId: clientData._id,
+        clientName: clientData.name || 'Unknown Client',
+        clientAvatar: clientAvatar, // Add direct access
+        bookerUserId: booking.bookerUserId,
+        
+        // Artisan information with avatar
+        artisan: {
+          _id: artisanData._id,
+          name: artisanData.name || 'Unknown Artisan',
+          email: artisanData.email,
+          skill: artisanData.skill || 'General Services',
+          phone: artisanData.phone,
+          avatar: artisanAvatar,
+          photo: artisanAvatar, // Provide both for compatibility
+          premium: artisanData.premium || false
+        },
+        artisanId: artisanData._id,
+        artisanName: artisanData.name || 'Unknown Artisan',
+        artisanAvatar: artisanAvatar, // Add direct access
+        bookedArtisanId: booking.bookedArtisanId,
+        
+        createdAt: booking.createdAt,
+        updatedAt: booking.updatedAt
+      };
+    });
     
     res.json(normalizedBookings);
   } catch (error) {

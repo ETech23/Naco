@@ -1,32 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
+    <!-- Theme script MUST be first -->
+  <script>
+  (function() {
+    const theme = localStorage.getItem('naco_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    window.addEventListener('DOMContentLoaded', () => {
+      document.body.className = theme;
+    });
+  })();
+</script>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Bookings - Naco</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    :root {
-      --golden: #c9b037;
-      --green: #0f7a4a;
-      --green-light: #10955a;
-      --bg: #000000;
-      --card: #1a1a1a;
-      --text: #ffffff;
-      --muted: #888888;
-      --border: #333333;
-      --radius: 16px;
-      --radius-sm: 8px;
-      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
-    }
+:root {
+  --golden: #c9b037;
+  --green: #0f7a4a;
+  --green-light: #10955a;
+  --bg: #f8faf9;
+  --card: #ffffff;
+  --text: #000000;
+  --muted: #666666;
+  --border: #e2e8f0;
+  --radius: 16px;
+  --radius-sm: 8px;
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
 
-    body.light {
-      --bg: #f8faf9;
-      --card: #ffffff;
-      --text: #000000;
-      --muted: #666666;
-      --border: #e2e8f0;
-    }
+body.dark {
+  --bg: #000000;
+  --card: #1a1a1a;
+  --text: #ffffff;
+  --muted: #888888;
+  --border: #333333;
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
+}
 
     * {
       box-sizing: border-box;
@@ -226,6 +237,12 @@
       <div id="bookings-list"></div>
     </div>
   </div>
+  
+  <script type="module">
+  import themeManager from './js/theme.js';
+  // Theme is already applied by the manager
+  console.log('Current theme:', themeManager.getCurrentTheme());
+</script>
 
   <script type="module">
     import * as API from './js/api.js';
@@ -349,7 +366,7 @@
     }
 
     // Render bookings
-    function renderBookings() {
+   /** function renderBookings() {
       const container = document.getElementById('bookings-list');
       
       let filteredBookings = allBookings;
@@ -410,9 +427,64 @@
       }).join('');
 
       bindBookingEvents();
-    }
+    }**/
+    // Render bookings
+function renderBookings() {
+  const container = document.getElementById('bookings-list');
+  
+  let filteredBookings = allBookings;
+  if (currentFilter !== 'all') {
+    filteredBookings = allBookings.filter(b => b.status === currentFilter);
+  }
 
-    function renderActionButtons(booking) {
+  if (filteredBookings.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <i class="fas fa-calendar-times"></i>
+        <p>No ${currentFilter === 'all' ? '' : currentFilter} bookings found</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filteredBookings.map(booking => {
+    const bookingId = (booking._id || booking.id || '').toString();
+    
+    // Get artisan name for display
+    const artisanName = booking.artisanName || 
+                       (typeof booking.artisan === 'object' ? booking.artisan?.name : null) ||
+                       'Artisan';
+    
+    return `
+      <div class="booking-card" data-booking-id="${bookingId}">
+        <div class="booking-header">
+          <div>
+            <div class="booking-title">${escapeHtml(booking.service || 'Service')}</div>
+            <div style="font-size: 14px; color: var(--muted);">
+              with ${escapeHtml(artisanName)}
+            </div>
+          </div>
+          <span class="status-badge status-${booking.status}">${formatStatus(booking.status)}</span>
+        </div>
+        
+        <div class="booking-details">
+          <div><i class="fas fa-calendar"></i> ${formatDate(booking.service_date)}</div>
+          <div><i class="fas fa-clock"></i> ${booking.service_time || 'N/A'}</div>
+          <div><i class="fas fa-map-marker-alt"></i> ${escapeHtml(booking.location || 'Location TBD')}</div>
+          <div><i class="fas fa-money-bill"></i> ₦${(booking.amount || 0).toLocaleString()}</div>
+        </div>
+
+        <div class="booking-actions" onclick="event.stopPropagation()">
+          ${renderActionButtons(booking)}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  bindBookingEvents();
+}
+
+    /**function renderActionButtons(booking) {
       const userData = localStorage.getItem('userData');
       const user = JSON.parse(userData);
       const status = booking.status;
@@ -435,9 +507,44 @@
       }
       
       return '';
-    }
+    }**/
+    
+    function renderActionButtons(booking) {
+  const status = booking.status;
+  const bookingId = (booking._id || booking.id || '').toString();
+  
+  // Booker-specific actions
+  if (status === 'pending') {
+    return `
+      <button class="btn btn-primary message-btn" data-booking-id="${bookingId}">
+        <i class="fas fa-comment"></i> Message
+      </button>
+      <button class="btn btn-danger cancel-btn" data-booking-id="${bookingId}">
+        <i class="fas fa-times"></i> Cancel
+      </button>
+    `;
+  }
+  
+  if (status === 'pending_confirmation') {
+    return `
+      <button class="btn btn-primary confirm-btn" data-booking-id="${bookingId}">
+        <i class="fas fa-check"></i> Confirm Completion
+      </button>
+    `;
+  }
+  
+  if (status === 'completed') {
+    return `
+      <button class="btn btn-primary review-btn" data-booking-id="${bookingId}">
+        <i class="fas fa-star"></i> Leave Review
+      </button>
+    `;
+  }
+  
+  return '';
+}
 
-    function bindBookingEvents() {
+   /** function bindBookingEvents() {
       // CRITICAL FIX: Improved event binding with proper ID handling
       document.querySelectorAll('.booking-card').forEach(card => {
         card.addEventListener('click', (e) => {
@@ -496,7 +603,78 @@
           }
         });
       });
-    }
+    **/
+    
+    function bindBookingEvents() {
+  document.querySelectorAll('.booking-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if (!e.target.closest('.booking-actions')) {
+        const bookingId = card.dataset.bookingId;
+        if (bookingId && bookingId !== 'undefined' && bookingId !== 'null') {
+          window.location.href = `booking-details.html?id=${encodeURIComponent(bookingId)}`;
+        }
+      }
+    });
+    
+
+document.querySelectorAll('.review-btn').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const bookingId = btn.dataset.bookingId;
+    // Navigate to review page
+    window.location.href = `review.html?booking=${encodeURIComponent(bookingId)}`;
+  });
+});
+  });
+
+  // Cancel booking (booker action)
+  document.querySelectorAll('.cancel-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const bookingId = btn.dataset.bookingId;
+      
+      if (confirm('Are you sure you want to cancel this booking?')) {
+        try {
+          await API.updateBookingStatus(bookingId, 'cancelled');
+          showToast('Booking cancelled successfully', 'success');
+          await loadBookings();
+        } catch (error) {
+          console.error('Error cancelling booking:', error);
+          showToast('Failed to cancel booking', 'error');
+        }
+      }
+    });
+  });
+
+  // Confirm completion (booker action)
+  document.querySelectorAll('.confirm-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const bookingId = btn.dataset.bookingId;
+      
+      if (confirm('Confirm that this service has been completed?')) {
+        try {
+          await API.updateBookingStatus(bookingId, 'completed');
+          showToast('Booking marked as completed', 'success');
+          await loadBookings();
+        } catch (error) {
+          console.error('Error confirming completion:', error);
+          showToast('Failed to confirm completion', 'error');
+        }
+      }
+    });
+  });
+
+  // Message artisan (booker action)
+  document.querySelectorAll('.message-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const bookingId = btn.dataset.bookingId;
+      // Navigate to chat page
+      window.location.href = `chat.html?booking=${encodeURIComponent(bookingId)}`;
+    });
+  });
+}
 
     function formatStatus(status) {
       const statusMap = {

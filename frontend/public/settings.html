@@ -1,6 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
+    <!-- Theme script MUST be first -->
+  <script>
+  (function() {
+    const theme = localStorage.getItem('naco_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    window.addEventListener('DOMContentLoaded', () => {
+      document.body.className = theme;
+    });
+  })();
+</script>
+  
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Settings - Naco</title>
@@ -235,14 +246,18 @@
       <div class="settings-section">
         <h2>Appearance</h2>
         <div class="setting-item">
-          <div class="setting-info">
-            <h3>Dark Mode</h3>
-            <p>Switch between light and dark themes</p>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="theme-toggle">
-            <span class="slider"></span>
-          </label>
+  <div class="setting-info">
+    <i class="fas fa-palette"></i>
+    <div>
+      <strong>Appearance</strong>
+      <p class="muted">Choose your preferred theme</p>
+    </div>
+  </div>
+  <label class="toggle-switch">
+    <input type="checkbox" id="settings-theme-toggle">
+    <span class="slider"></span>
+  </label>
+
         </div>
       </div>
 
@@ -303,6 +318,31 @@
       </div>
     </div>
   </div>
+  
+  <script type="module">
+  import themeManager from './js/theme.js';
+  // Theme is already applied by the manager
+  console.log('Current theme:', themeManager.getCurrentTheme());
+</script>
+
+<script type="module">
+  import themeManager from './js/theme.js';
+  
+  const themeToggle = document.getElementById('settings-theme-toggle');
+  
+  // Set initial state
+  themeToggle.checked = themeManager.getCurrentTheme() === 'dark';
+  
+  // Handle toggle
+  themeToggle.addEventListener('change', () => {
+    themeManager.toggleTheme();
+  });
+  
+  // Listen for changes from other pages
+  window.addEventListener('themechange', () => {
+    themeToggle.checked = themeManager.getCurrentTheme() === 'dark';
+  });
+</script>
 
   <script>
     const API_URL = window.location.hostname === 'localhost' 
@@ -315,7 +355,7 @@
     });
 
     // Theme toggle
-    const themeToggle = document.getElementById('theme-toggle');
+ /**   const themeToggle = document.getElementById('theme-toggle');
     const savedTheme = localStorage.getItem('theme') || 'dark';
     document.body.classList.toggle('light', savedTheme === 'light');
     themeToggle.checked = savedTheme === 'light';
@@ -325,7 +365,7 @@
       document.body.classList.toggle('light', themeToggle.checked);
       localStorage.setItem('theme', newTheme);
       showToast('Theme updated', 'success');
-    });
+    }); **/
 
     // Notifications toggle
     document.getElementById('notifications-toggle').addEventListener('change', (e) => {

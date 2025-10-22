@@ -1,11 +1,23 @@
 <!doctype html>
 <html lang="en">
 <head>
+    <!-- Theme script MUST be first -->
+  <script>
+  (function() {
+    const theme = localStorage.getItem('naco_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    window.addEventListener('DOMContentLoaded', () => {
+      document.body.className = theme;
+    });
+  })();
+</script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   
   <meta name="color-scheme" content="light dark">
   <title>Naco — Find Trusted Artisans</title>
+  
+
 
   <!-- Google Font -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -194,7 +206,11 @@
     </button>
     
     
-  
+      <script type="module">
+  import themeManager from './js/theme.js';
+  // Theme is already applied by the manager
+  console.log('Current theme:', themeManager.getCurrentTheme());
+</script>
 
   
    <!-- PocketBase SDKyour -->
