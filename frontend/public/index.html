@@ -124,14 +124,16 @@
           <i class="fas fa-bars"></i>
         </button>-->
         
-        <button id="location-btn" class="header-btn" title="Location Settings">
-  <i class="fas fa-map-marker-alt"></i>
-</button>
-        
+
         <button id="profile-btn" class="header-icon-btn mobile-only" title="Profile">
           <i class="fas fa-bars"></i>
           <!--  <img id="profile-pic" src="assets/avatar-placeholder.png" alt="Profile" class="profile-avatar">-->
         </button>
+        
+                <button id="location-btn" class="header-btn" title="Location Settings">
+  <i class="fas fa-map-marker-alt"></i>
+</button>
+         
       </div>
     </div>
   </div>
@@ -198,9 +200,22 @@
           <i class="fas fa-times"></i>
         </button>
       </div>
-      <select id="search-city-select" class="city-select">
+      
+      <div class="filter-controls">
+  <select id="city-select">
+    <option value="">All Cities</option>
+    <!-- cities populated here -->
+  </select>
+  
+  <label class="sort-toggle">
+    <input type="checkbox" id="sort-by-distance" checked>
+    <span>Sort by Distance</span>
+  </label>
+</div>
+ 
+     <!-- <select id="search-city-select" class="city-select">
         <option value="">All Cities</option>
-      </select>
+      </select> -->
     </div>
     
     <div class="search-suggestions">

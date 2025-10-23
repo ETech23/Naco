@@ -734,9 +734,12 @@ body.dark {
                 
                 // Redirect to profile or main app
                 setTimeout(() => {
-                    const returnUrl = new URLSearchParams(window.location.search).get('return') || 'index.html#profile';
-                    window.location.href = returnUrl;
-                }, 1000);
+  // Tell app.js to prompt for location on next page
+  localStorage.setItem('trigger_location_prompt', 'true');
+
+  const returnUrl = new URLSearchParams(window.location.search).get('return') || 'index.html#profile';
+  window.location.href = returnUrl;
+}, 1000);
                 
             } catch (error) {
                 console.error('Login failed:', error);
@@ -776,9 +779,12 @@ body.dark {
                 
                 // Redirect to profile or main app
                 setTimeout(() => {
-                    const returnUrl = new URLSearchParams(window.location.search).get('return') || 'index.html#profile';
-                    window.location.href = returnUrl;
-                }, 1000);
+  // Tell app.js to prompt for location on next page
+  localStorage.setItem('trigger_location_prompt', 'true');
+
+  const returnUrl = new URLSearchParams(window.location.search).get('return') || 'index.html#profile';
+  window.location.href = returnUrl;
+}, 1000);
                 
             } catch (error) {
                 console.error('Signup failed:', error);

@@ -451,6 +451,30 @@ app.post('/auth/logout', async (req, res) => {
   }
 });
 
+// When artisan registers/updates profile
+async function geocodeArtisanLocation(address) {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`
+    );
+    const data = await response.json();
+    
+    if (data[0]) {
+      return {
+        location: address,
+        city: data[0].address.city || data[0].address.town,
+        state: data[0].address.state,
+        latitude: parseFloat(data[0].lat),
+        longitude: parseFloat(data[0].lon)
+      };
+    }
+  } catch (error) {
+    console.error('Geocoding failed:', error);
+  }
+  
+  return { location: address }; // Fallback
+}
+
 // Get current user
 app.get('/auth/user', authenticateToken, async (req, res) => {
   try {

@@ -302,6 +302,117 @@ body, html {
   }
 }
 
+/* Sort toggle */
+.sort-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.sort-toggle:hover {
+  background: var(--bg);
+}
+
+.sort-toggle input[type="checkbox"] {
+  margin: 0;
+}
+
+.sort-toggle span {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Distance indicator colors */
+.distance-indicator.near {
+  background: rgba(15, 122, 74, 0.1);
+  color: var(--green);
+}
+
+.distance-indicator.medium {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.distance-indicator.far {
+  background: rgba(136, 136, 136, 0.1);
+  color: var(--muted);
+}
+
+.privacy-modal {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.privacy-section {
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.privacy-section:last-of-type {
+  border-bottom: none;
+}
+
+.privacy-section h3 {
+  margin: 0 0 16px 0;
+  color: var(--text);
+  font-size: 18px;
+}
+
+.privacy-section ul {
+  margin: 16px 0;
+  padding-left: 24px;
+  line-height: 1.8;
+}
+
+.privacy-section li {
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.method-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  background: var(--bg);
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.method-card i {
+  font-size: 32px;
+  color: var(--green);
+  margin-top: 4px;
+}
+
+.method-card strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.method-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.privacy-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+}
+
 /* Location Settings Modal */
 .location-settings-modal {
   max-width: 500px;
@@ -2468,8 +2579,8 @@ body.dark .search-input-container input:focus {
 }
 
 .search-result-card img {
-  width: 320px;
-  height: 320px;
+  width: 150px;
+  height: 150px;
   border-radius: 10px;
   object-fit: cover;
   flex-shrink: 0;
@@ -2487,8 +2598,8 @@ body.dark .search-input-container input:focus {
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px;
+  gap: 4px;
+  padding: 2px;
 }
 
 .search-result-skill {

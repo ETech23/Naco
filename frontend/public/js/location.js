@@ -1,574 +1,397 @@
 class LocationManager {
   constructor() {
     this.currentLocation = null;
-    this.locationMethod = null; // 'gps', 'ip', or 'manual'
-    this.locationError = null;
-    this.watchId = null;
+    this.locationWatchId = null;
+    this.geocodeCache = new Map();
+    this.cityCoordinates = this.initializeCityDatabase();
   }
 
   /**
-   * Get user location with automatic fallback
-   * @param {Object} options - Configuration options
-   * @returns {Promise<Object>} Location object with latitude, longitude, method
+   * Initialize major Nigerian city coordinates database
+   */
+  initializeCityDatabase() {
+    return new Map([
+      ['lagos', { lat: 6.5244, lon: 3.3792, radius: 50 }],
+      ['abuja', { lat: 9.0765, lon: 7.3986, radius: 40 }],
+      ['port harcourt', { lat: 4.8156, lon: 7.0498, radius: 30 }],
+      ['kano', { lat: 12.0022, lon: 8.5920, radius: 35 }],
+      ['ibadan', { lat: 7.3775, lon: 3.9470, radius: 30 }],
+      ['kaduna', { lat: 10.5105, lon: 7.4165, radius: 25 }],
+      ['benin city', { lat: 6.3350, lon: 5.6037, radius: 20 }],
+      ['jos', { lat: 9.9295, lon: 8.8922, radius: 20 }],
+      ['ilorin', { lat: 8.5370, lon: 4.5420, radius: 18 }],
+      ['enugu', { lat: 6.5244, lon: 7.5106, radius: 22 }],
+      ['abeokuta', { lat: 7.1475, lon: 3.3619, radius: 18 }],
+      ['owerri', { lat: 5.4840, lon: 7.0351, radius: 15 }],
+      ['calabar', { lat: 4.9518, lon: 8.3417, radius: 18 }],
+      ['akure', { lat: 7.2571, lon: 5.2058, radius: 15 }],
+      ['warri', { lat: 5.5171, lon: 5.7500, radius: 20 }],
+    ]);
+  }
+
+  /**
+   * Normalize city name for consistent matching
+   */
+  normalizeCity(cityName) {
+    if (!cityName) return null;
+    
+    return cityName
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\b(city|state|lga)\b/gi, '')
+      .trim();
+  }
+
+  /**
+   * Get city coordinates with fuzzy matching
+   */
+  getCityCoordinates(cityName) {
+    const normalized = this.normalizeCity(cityName);
+    if (!normalized) return null;
+
+    // Direct match
+    if (this.cityCoordinates.has(normalized)) {
+      return this.cityCoordinates.get(normalized);
+    }
+
+    // Fuzzy match (partial matching)
+    for (const [key, coords] of this.cityCoordinates.entries()) {
+      if (key.includes(normalized) || normalized.includes(key)) {
+        return coords;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Calculate Haversine distance between two coordinates
+   */
+  calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth's radius in km
+    
+    const dLat = this.toRad(lat2 - lat1);
+    const dLon = this.toRad(lon2 - lon1);
+    
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  toRad(degrees) {
+    return degrees * (Math.PI / 180);
+  }
+
+  /**
+   * Get user location with comprehensive fallback strategy
    */
   async getLocation(options = {}) {
     const {
       enableHighAccuracy = true,
       timeout = 10000,
-      maximumAge = 300000, // 5 minutes
-      fallbackToIP = true,
-      showPrompt = true
+      maximumAge = 60000,
+      fallbackToIP = true
     } = options;
 
     try {
       // Try GPS first
-      console.log('Attempting GPS location...');
-      const gpsLocation = await this.getGPSLocation({
+      const position = await this.getGPSLocation({
         enableHighAccuracy,
         timeout,
         maximumAge
       });
 
-      this.currentLocation = {
-        ...gpsLocation,
+      const locationData = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
         method: 'gps',
-        accuracy: gpsLocation.accuracy,
-        timestamp: Date.now()
+        timestamp: new Date().toISOString()
       };
 
-      this.locationMethod = 'gps';
-      this.locationError = null;
+      // Reverse geocode to get city
+      const cityInfo = await this.getCityFromCoordinates(
+        locationData.latitude,
+        locationData.longitude
+      );
 
-      console.log('GPS location obtained:', this.currentLocation);
-      
-      // Store location
-      this.storeLocation(this.currentLocation);
-      
-      return this.currentLocation;
-
-    } catch (gpsError) {
-      console.warn('GPS location failed:', gpsError.message);
-      this.locationError = gpsError;
-
-      // Fallback to IP geolocation
-      if (fallbackToIP) {
-        try {
-          console.log('Falling back to IP geolocation...');
-          const ipLocation = await this.getIPLocation();
-
-          this.currentLocation = {
-            ...ipLocation,
-            method: 'ip',
-            accuracy: 5000, // IP location is less accurate (±5km)
-            timestamp: Date.now()
-          };
-
-          this.locationMethod = 'ip';
-
-          console.log('IP location obtained:', this.currentLocation);
-          
-          // Store location
-          this.storeLocation(this.currentLocation);
-          
-          return this.currentLocation;
-
-        } catch (ipError) {
-          console.error('IP geolocation also failed:', ipError);
-          
-          // Final fallback - use stored location or default
-          const stored = this.getStoredLocation();
-          if (stored) {
-            console.log('Using stored location:', stored);
-            this.currentLocation = stored;
-            return stored;
-          }
-
-          // Ultimate fallback - Lagos, Nigeria (default)
-          this.currentLocation = this.getDefaultLocation();
-          console.log('Using default location:', this.currentLocation);
-          return this.currentLocation;
-        }
-      } else {
-        throw gpsError;
+      if (cityInfo) {
+        locationData.city = cityInfo.city;
+        locationData.state = cityInfo.state;
+        locationData.country = cityInfo.country;
       }
+
+      this.currentLocation = locationData;
+      this.saveLocation(locationData);
+      return locationData;
+
+    } catch (error) {
+      console.warn('GPS location failed:', error);
+
+      if (fallbackToIP) {
+        return await this.getIPLocation();
+      }
+
+      throw error;
     }
   }
 
   /**
-   * Get GPS location using browser Geolocation API
+   * Get GPS location
    */
-  getGPSLocation(options = {}) {
+  getGPSLocation(options) {
     return new Promise((resolve, reject) => {
-      if (!('geolocation' in navigator)) {
-        reject(new Error('Geolocation not supported by browser'));
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation not supported'));
         return;
       }
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            altitude: position.coords.altitude,
-            heading: position.coords.heading,
-            speed: position.coords.speed
-          });
-        },
-        (error) => {
-          let errorMessage = 'Location access denied';
-          
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              errorMessage = 'User denied location access';
-              break;
-            case error.POSITION_UNAVAILABLE:
-              errorMessage = 'Location information unavailable';
-              break;
-            case error.TIMEOUT:
-              errorMessage = 'Location request timed out';
-              break;
-          }
-          
-          reject(new Error(errorMessage));
-        },
-        {
-          enableHighAccuracy: options.enableHighAccuracy !== false,
-          timeout: options.timeout || 10000,
-          maximumAge: options.maximumAge || 300000
-        }
-      );
+      navigator.geolocation.getCurrentPosition(resolve, reject, options);
     });
   }
 
   /**
-   * Get approximate location using IP address
-   * Uses multiple services for redundancy
+   * Get IP-based location with multiple fallbacks
    */
   async getIPLocation() {
-    // Try multiple IP geolocation services in order
-    const services = [
+    const ipApis = [
       {
-        name: 'ipapi',
         url: 'https://ipapi.co/json/',
-        parse: (data) => ({
+        parser: (data) => ({
           latitude: data.latitude,
           longitude: data.longitude,
           city: data.city,
-          region: data.region,
+          state: data.region,
           country: data.country_name,
-          countryCode: data.country_code
+          accuracy: 5000,
+          method: 'ip',
+          timestamp: new Date().toISOString()
         })
       },
       {
-        name: 'ip-api',
-        url: 'http://ip-api.com/json/',
-        parse: (data) => ({
-          latitude: data.lat,
-          longitude: data.lon,
-          city: data.city,
-          region: data.regionName,
-          country: data.country,
-          countryCode: data.countryCode
-        })
-      },
-      {
-        name: 'ipgeolocation',
-        url: 'https://api.ipgeolocation.io/ipgeo?apiKey=free',
-        parse: (data) => ({
-          latitude: parseFloat(data.latitude),
-          longitude: parseFloat(data.longitude),
-          city: data.city,
-          region: data.state_prov,
-          country: data.country_name,
-          countryCode: data.country_code2
-        })
+        url: 'https://ipinfo.io/json',
+        parser: (data) => {
+          const [lat, lon] = data.loc.split(',').map(Number);
+          return {
+            latitude: lat,
+            longitude: lon,
+            city: data.city,
+            state: data.region,
+            country: data.country,
+            accuracy: 10000,
+            method: 'ip',
+            timestamp: new Date().toISOString()
+          };
+        }
       }
     ];
 
-    let lastError = null;
-
-    for (const service of services) {
+    for (const api of ipApis) {
       try {
-        console.log(`Trying IP location service: ${service.name}`);
+        const response = await fetch(api.url);
+        if (!response.ok) continue;
         
-        const response = await fetch(service.url, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json'
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
         const data = await response.json();
-        const location = service.parse(data);
-
-        // Validate location data
-        if (!location.latitude || !location.longitude) {
-          throw new Error('Invalid location data');
-        }
-
-        console.log(`IP location obtained from ${service.name}:`, location);
-        return location;
-
+        const locationData = api.parser(data);
+        
+        this.currentLocation = locationData;
+        this.saveLocation(locationData);
+        return locationData;
+        
       } catch (error) {
-        console.warn(`${service.name} failed:`, error.message);
-        lastError = error;
+        console.warn(`IP API ${api.url} failed:`, error);
         continue;
       }
     }
 
-    throw new Error(`All IP geolocation services failed. Last error: ${lastError?.message}`);
+    // Ultimate fallback
+    return this.getDefaultLocation();
   }
 
   /**
-   * Watch location changes (continuous tracking)
+   * Reverse geocode coordinates to city name
    */
-  watchLocation(callback, options = {}) {
-    if (!('geolocation' in navigator)) {
-      console.warn('Geolocation not supported');
-      return null;
+  async getCityFromCoordinates(lat, lon) {
+    const cacheKey = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+    
+    if (this.geocodeCache.has(cacheKey)) {
+      return this.geocodeCache.get(cacheKey);
     }
 
-    this.watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        this.currentLocation = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          method: 'gps',
-          timestamp: Date.now()
-        };
-
-        this.storeLocation(this.currentLocation);
-        
-        if (callback) {
-          callback(this.currentLocation);
-        }
-      },
-      (error) => {
-        console.error('Watch location error:', error);
-        this.locationError = error;
-      },
-      {
-        enableHighAccuracy: options.enableHighAccuracy !== false,
-        timeout: options.timeout || 10000,
-        maximumAge: options.maximumAge || 60000
-      }
-    );
-
-    return this.watchId;
-  }
-
-  /**
-   * Stop watching location
-   */
-  stopWatching() {
-    if (this.watchId) {
-      navigator.geolocation.clearWatch(this.watchId);
-      this.watchId = null;
-      console.log('Stopped watching location');
-    }
-  }
-
-  /**
-   * Calculate distance between two coordinates (Haversine formula)
-   * @returns {number} Distance in kilometers
-   */
-  calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Earth's radius in km
-    const dLat = this.toRadians(lat2 - lat1);
-    const dLon = this.toRadians(lon2 - lon1);
-    
-    const a = 
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c;
-    
-    return Math.round(distance * 10) / 10; // Round to 1 decimal place
-  }
-
-  toRadians(degrees) {
-    return degrees * (Math.PI / 180);
-  }
-
-  /**
-   * Get distance from current location to a point
-   */
-  getDistanceTo(latitude, longitude) {
-    if (!this.currentLocation) {
-      return null;
-    }
-
-    return this.calculateDistance(
-      this.currentLocation.latitude,
-      this.currentLocation.longitude,
-      latitude,
-      longitude
-    );
-  }
-
-  /**
-   * Get city from coordinates using reverse geocoding
-   */
-  async getCityFromCoordinates(latitude, longitude) {
     try {
-      // Use Nominatim (OpenStreetMap) for reverse geocoding
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`,
+        `https://nominatim.openstreetmap.org/reverse?` +
+        `format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`,
         {
           headers: {
-            'Accept': 'application/json'
+            'User-Agent': 'NacoApp/1.0'
           }
         }
       );
 
-      if (!response.ok) {
-        throw new Error('Reverse geocoding failed');
-      }
+      if (!response.ok) throw new Error('Geocoding failed');
 
       const data = await response.json();
-      
-      return {
+      const cityInfo = {
         city: data.address.city || data.address.town || data.address.village,
         state: data.address.state,
-        country: data.address.country,
-        displayName: data.display_name
+        country: data.address.country
       };
 
+      this.geocodeCache.set(cacheKey, cityInfo);
+      return cityInfo;
+
     } catch (error) {
-      console.error('Reverse geocoding error:', error);
-      return null;
+      console.warn('Reverse geocoding failed:', error);
+      return this.guesssCityFromCoordinates(lat, lon);
     }
   }
 
   /**
-   * Store location in localStorage
+   * Guess city from coordinates using database
    */
-  storeLocation(location) {
-    try {
-      localStorage.setItem('naco_location', JSON.stringify({
-        ...location,
-        timestamp: Date.now()
-      }));
-    } catch (error) {
-      console.error('Failed to store location:', error);
-    }
-  }
+  guessCityFromCoordinates(lat, lon) {
+    let closestCity = null;
+    let minDistance = Infinity;
 
-  /**
-   * Get stored location
-   */
-  getStoredLocation() {
-    try {
-      const stored = localStorage.getItem('naco_location');
-      if (!stored) return null;
-
-      const location = JSON.parse(stored);
+    for (const [cityName, coords] of this.cityCoordinates.entries()) {
+      const distance = this.calculateDistance(lat, lon, coords.lat, coords.lon);
       
-      // Check if stored location is still valid (less than 24 hours old)
-      const age = Date.now() - location.timestamp;
-      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-
-      if (age > maxAge) {
-        console.log('Stored location expired');
-        localStorage.removeItem('naco_location');
-        return null;
+      if (distance < minDistance && distance < coords.radius) {
+        minDistance = distance;
+        closestCity = {
+          city: cityName.charAt(0).toUpperCase() + cityName.slice(1),
+          state: null,
+          country: 'Nigeria',
+          confidence: 1 - (distance / coords.radius)
+        };
       }
-
-      return location;
-
-    } catch (error) {
-      console.error('Failed to get stored location:', error);
-      return null;
     }
+
+    return closestCity || { city: 'Lagos', state: 'Lagos', country: 'Nigeria' };
   }
 
   /**
-   * Get default location (Lagos, Nigeria)
+   * Default fallback location
    */
   getDefaultLocation() {
     return {
       latitude: 6.5244,
       longitude: 3.3792,
       city: 'Lagos',
+      state: 'Lagos',
       country: 'Nigeria',
+      accuracy: 50000,
       method: 'default',
-      accuracy: 10000,
-      timestamp: Date.now()
+      timestamp: new Date().toISOString()
     };
   }
 
   /**
-   * Check if location permission is granted
+   * Check permission status
    */
   async checkPermission() {
-    if (!('permissions' in navigator)) {
-      return 'prompt'; // Unknown
-    }
-
     try {
       const result = await navigator.permissions.query({ name: 'geolocation' });
-      return result.state; // 'granted', 'denied', or 'prompt'
+      return result.state;
     } catch (error) {
-      console.error('Permission check failed:', error);
       return 'prompt';
     }
   }
 
   /**
-   * Request location permission with custom UI
+   * Watch location changes
    */
-  async requestPermission(showCustomPrompt = true) {
-    const permission = await this.checkPermission();
+  watchLocation(callback, options = {}) {
+    if (!navigator.geolocation) return null;
 
-    if (permission === 'granted') {
-      return true;
+    this.locationWatchId = navigator.geolocation.watchPosition(
+      async (position) => {
+        const locationData = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          method: 'gps',
+          timestamp: new Date().toISOString()
+        };
+
+        const cityInfo = await this.getCityFromCoordinates(
+          locationData.latitude,
+          locationData.longitude
+        );
+
+        if (cityInfo) {
+          Object.assign(locationData, cityInfo);
+        }
+
+        this.currentLocation = locationData;
+        callback(locationData);
+      },
+      (error) => console.warn('Location watch error:', error),
+      options
+    );
+
+    return this.locationWatchId;
+  }
+
+  /**
+   * Stop watching location
+   */
+  stopWatching() {
+    if (this.locationWatchId) {
+      navigator.geolocation.clearWatch(this.locationWatchId);
+      this.locationWatchId = null;
     }
+  }
 
-    if (permission === 'denied') {
-      return false;
-    }
-
-    // Permission is 'prompt' - need to request
-    if (showCustomPrompt) {
-      return new Promise((resolve) => {
-        this.showPermissionDialog(resolve);
-      });
-    }
-
-    // Trigger browser's native permission prompt
+  /**
+   * Save location to localStorage
+   */
+  saveLocation(locationData) {
     try {
-      await this.getGPSLocation();
-      return true;
+      localStorage.setItem('naco_location', JSON.stringify(locationData));
     } catch (error) {
-      return false;
+      console.warn('Failed to save location:', error);
     }
   }
 
   /**
-   * Show custom permission dialog
+   * Load saved location
    */
-  showPermissionDialog(callback) {
-    const dialog = document.createElement('div');
-    dialog.id = 'location-permission-dialog';
-    dialog.innerHTML = `
-      <div style="
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0,0,0,0.8);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10000;
-        padding: 20px;
-      ">
-        <div style="
-          background: var(--card);
-          padding: 30px;
-          border-radius: 16px;
-          max-width: 400px;
-          width: 100%;
-          text-align: center;
-          box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-        ">
-          <i class="fas fa-map-marker-alt" style="
-            font-size: 48px;
-            color: var(--green);
-            margin-bottom: 20px;
-          "></i>
-          <h3 style="margin-bottom: 10px; color: var(--text);">Enable Location Access</h3>
-          <p style="color: var(--muted); margin-bottom: 30px; line-height: 1.6;">
-            We need your location to show you nearby artisans and provide accurate distance estimates.
-          </p>
-          <div style="display: flex; flex-direction: column; gap: 12px;">
-            <button id="allow-location" style="
-              padding: 14px;
-              background: var(--green);
-              color: white;
-              border: none;
-              border-radius: 8px;
-              font-weight: 600;
-              cursor: pointer;
-              font-size: 16px;
-            ">
-              Allow Location Access
-            </button>
-            <button id="deny-location" style="
-              padding: 14px;
-              background: var(--border);
-              color: var(--text);
-              border: none;
-              border-radius: 8px;
-              font-weight: 600;
-              cursor: pointer;
-              font-size: 16px;
-            ">
-              Use Approximate Location
-            </button>
-          </div>
-          <p style="
-            font-size: 12px;
-            color: var(--muted);
-            margin-top: 16px;
-            line-height: 1.4;
-          ">
-            Don't worry! We'll use your IP address to estimate your location if you decline.
-          </p>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(dialog);
-
-    const allowBtn = dialog.querySelector('#allow-location');
-    const denyBtn = dialog.querySelector('#deny-location');
-
-    allowBtn.addEventListener('click', async () => {
-      dialog.remove();
-      
-      try {
-        await this.getGPSLocation();
-        callback(true);
-      } catch (error) {
-        callback(false);
+  loadSavedLocation() {
+    try {
+      const saved = localStorage.getItem('naco_location');
+      if (saved) {
+        const locationData = JSON.parse(saved);
+        const age = Date.now() - new Date(locationData.timestamp).getTime();
+        
+        // Consider saved location fresh for 1 hour
+        if (age < 3600000) {
+          this.currentLocation = locationData;
+          return locationData;
+        }
       }
-    });
-
-    denyBtn.addEventListener('click', () => {
-      dialog.remove();
-      callback(false);
-    });
+    } catch (error) {
+      console.warn('Failed to load saved location:', error);
+    }
+    return null;
   }
 
   /**
-   * Get current location or cached
-   */
-  getCurrentLocation() {
-    return this.currentLocation || this.getStoredLocation() || this.getDefaultLocation();
-  }
-
-  /**
-   * Clear stored location
+   * Clear saved location
    */
   clearLocation() {
     localStorage.removeItem('naco_location');
     this.currentLocation = null;
-    this.locationMethod = null;
-    console.log('Location cleared');
   }
 }
 
-// Create global instance
+// Export singleton instance
 const locationManager = new LocationManager();
-
 export default locationManager;

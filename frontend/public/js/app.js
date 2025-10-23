@@ -178,6 +178,102 @@ initializeModalCSS() {
       max-height: 90vh;
       overflow-y: auto;
     }
+    
+    /* Location prompt modal */
+.location-prompt-modal {
+  text-align: center;
+  padding: 30px;
+  max-width: 450px;
+}
+
+.location-prompt-icon {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, var(--primary), var(--green));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  font-size: 36px;
+  color: white;
+}
+
+.location-benefits {
+  text-align: left;
+  margin: 20px 0;
+  list-style: none;
+  padding: 0;
+}
+
+.location-benefits li {
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.location-benefits i {
+  color: var(--green);
+}
+
+.privacy-note {
+  background: var(--bg);
+  padding: 12px;
+  border-radius: 8px;
+  margin: 20px 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.privacy-note i {
+  color: var(--primary);
+}
+
+.location-prompt-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+/* Pulse animation for location indicator */
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+  }
+}
+
+.location-instructions-modal {
+  padding: 20px;
+  max-width: 500px;
+}
+
+.browser-instructions {
+  text-align: left;
+  margin: 20px 0;
+}
+
+.browser-instructions h4 {
+  margin: 15px 0 10px 0;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.browser-instructions ol {
+  margin-left: 20px;
+  line-height: 1.6;
+}
+
+.browser-instructions li {
+  margin: 5px 0;
+  color: var(--text);
+}
     </style>
   `;
 
@@ -323,6 +419,7 @@ setupNetworkMonitoring() {
       // Initialize location FIRST (before loading artisans)
       await this.initializeLocation();
       
+      
       await this.loadArtisans();
       this.loadFavorites();
       this.loadTheme();
@@ -343,10 +440,18 @@ setupNetworkMonitoring() {
       
       this.handleNotificationFromURL();
       
+      await this.promptLocationIfNeeded();
+      
+      
       this.setState({ isLoading: false });
       this.render();
       
       console.log('App initialized successfully with location:', this.state.currentLocation);
+      
+      // Start location tracking if user has granted permission
+    if (this.state.user) {
+      this.startLocationTracking();
+    }
     } catch (error) {
       console.error('App initialization failed:', error);
       this.setState({ isLoading: false });
@@ -354,146 +459,754 @@ setupNetworkMonitoring() {
   }
 
   /**
-   * Initialize location with automatic fallback
-   */
-  async initializeLocation() {
-    try {
-      console.log('Initializing location system...');
-      
-      // Check permission status first
-      const permission = await this.locationManager.checkPermission();
-      console.log('Location permission status:', permission);
-
-      // Get location (with automatic GPS -> IP fallback)
-      const location = await this.locationManager.getLocation({
-        enableHighAccuracy: true,
-        timeout: 10000,
-        fallbackToIP: true,
-        showPrompt: false // Don't show custom prompt on init
-      });
-
-      this.setState({ currentLocation: location });
-
-      // Get city name if not provided
-      if (!location.city && location.latitude && location.longitude) {
-        const cityInfo = await this.locationManager.getCityFromCoordinates(
-          location.latitude,
-          location.longitude
-        );
-        
-        if (cityInfo) {
-          location.city = cityInfo.city;
-          location.state = cityInfo.state;
-          this.setState({ currentLocation: location });
-        }
-      }
-
-      // Show toast based on location method
-      if (location.method === 'gps') {
-        this.showToast('📍 Location detected successfully', 'success');
-      } else if (location.method === 'ip') {
-        this.showToast('📍 Using approximate location (IP-based)', 'info');
-      } else {
-        this.showToast('📍 Using default location', 'info');
-      }
-
-      console.log('Location initialized:', location);
-
-    } catch (error) {
-      console.error('Location initialization failed:', error);
-      
-      // Use default location on complete failure
-      const defaultLocation = this.locationManager.getDefaultLocation();
-      this.setState({ currentLocation: defaultLocation });
-      
-      this.showToast('Using default location (Lagos)', 'info');
-    }
-  }
-
-  /**
-   * Request precise location with user prompt
-   */
-  async requestPreciseLocation() {
-    const granted = await this.locationManager.requestPermission(true);
+ * Initialize location with loading states and better error handling
+ */
+async initializeLocation() {
+  try {
+    console.log('🌍 Initializing location system...');
     
-    if (granted) {
+    // Show loading indicator
+    this.setState({ isLoadingLocation: true });
+    this.showLocationLoadingIndicator();
+
+    // Check saved location first (fast)
+    const savedLocation = this.locationManager.loadSavedLocation();
+    if (savedLocation) {
+      console.log('✓ Using saved location:', savedLocation);
+      this.setState({ 
+        currentLocation: savedLocation,
+        isLoadingLocation: false 
+      });
+      this.hideLocationLoadingIndicator();
+      
+      // Refresh in background
+      this.refreshLocationInBackground();
+      return;
+    }
+
+    // Check permission status
+    const permission = await this.locationManager.checkPermission();
+    console.log('📍 Permission status:', permission);
+
+    let location;
+
+    if (permission === 'granted') {
+      // Permission already granted - use GPS
       try {
-        const location = await this.locationManager.getLocation({
+        location = await this.locationManager.getLocation({
           enableHighAccuracy: true,
+          timeout: 10000,
           fallbackToIP: false
         });
-        
-        this.setState({ currentLocation: location });
-        this.showToast('📍 Precise location enabled', 'success');
-        
-        // Refresh artisan list with new location
-        await this.loadArtisans();
-        this.render();
-        
-      } catch (error) {
-        this.showToast('Failed to get precise location', 'error');
+        this.showToast('📍 Using precise GPS location', 'success');
+      } catch (gpsError) {
+        console.warn('GPS failed, using IP fallback:', gpsError);
+        location = await this.locationManager.getIPLocation();
+        this.showToast('📍 Using approximate location', 'info');
+      }
+    } else if (permission === 'denied') {
+      // Permission denied - use IP location
+      console.log('Location permission denied, using IP');
+      location = await this.locationManager.getIPLocation();
+      
+      const hasBeenPrompted = localStorage.getItem('naco_location_prompted');
+      if (!hasBeenPrompted) {
+        this.showLocationDeniedHelp();
+        localStorage.setItem('naco_location_prompted', 'true');
       }
     } else {
-      this.showToast('Location access denied - using IP location', 'info');
-    }
-  }
-
-  /**
-   * Calculate distance using location manager
-   */
-  calculateDistance(artisanLocation) {
-    if (!this.state.currentLocation) {
-      return Math.floor(Math.random() * 20) + 1; // Fallback to random
-    }
-
-    // If artisan has coordinates
-    if (artisanLocation.latitude && artisanLocation.longitude) {
-      return this.locationManager.calculateDistance(
-        this.state.currentLocation.latitude,
-        this.state.currentLocation.longitude,
-        artisanLocation.latitude,
-        artisanLocation.longitude
-      );
-    }
-
-    // Fallback: estimate based on city match
-    if (artisanLocation.city || artisanLocation) {
-      const artisanCity = typeof artisanLocation === 'string' ? 
-        artisanLocation : 
-        artisanLocation.city;
+      // Permission prompt state - ask user
+      const hasBeenPrompted = localStorage.getItem('naco_location_prompted');
       
-      const userCity = this.state.currentLocation.city || this.state.selectedCity;
-      
-      if (artisanCity?.toLowerCase() === userCity?.toLowerCase()) {
-        return Math.floor(Math.random() * 5) + 1; // Same city: 1-5km
+      if (!hasBeenPrompted) {
+        const userWantsLocation = await this.showLocationPermissionPrompt();
+        localStorage.setItem('naco_location_prompted', 'true');
+        
+        if (userWantsLocation) {
+          try {
+            location = await this.locationManager.getLocation({
+              enableHighAccuracy: true,
+              timeout: 10000,
+              fallbackToIP: false
+            });
+            this.showToast('📍 Using precise GPS location', 'success');
+          } catch (error) {
+            console.warn('User granted but GPS failed:', error);
+            location = await this.locationManager.getIPLocation();
+            this.showToast('📍 Using approximate location', 'info');
+          }
+        } else {
+          location = await this.locationManager.getIPLocation();
+          this.showToast('📍 Using approximate location', 'info');
+        }
       } else {
-        return Math.floor(Math.random() * 40) + 10; // Different city: 10-50km
+        // Already prompted before - use IP silently
+        location = await this.locationManager.getIPLocation();
       }
     }
 
-    return Math.floor(Math.random() * 20) + 1; // Default fallback
-  }
+    this.setState({ 
+      currentLocation: location,
+      isLoadingLocation: false 
+    });
+    this.hideLocationLoadingIndicator();
 
-  /**
-   * Sort artisans by proximity
-   */
-  sortArtisansByDistance(artisans) {
-    if (!this.state.currentLocation) {
-      return artisans;
+    console.log('✓ Location initialized:', location);
+    
+    // Auto-filter artisans by location
+    await this.detectAndSuggestCity();
+
+  } catch (error) {
+    console.error('❌ Location initialization failed:', error);
+    
+    const defaultLocation = this.locationManager.getDefaultLocation();
+    this.setState({ 
+      currentLocation: defaultLocation,
+      isLoadingLocation: false 
+    });
+    this.hideLocationLoadingIndicator();
+    
+    this.showToast('Using default location (Lagos)', 'info');
+  }
+}
+
+/**
+ * Refresh location in background
+ */
+async refreshLocationInBackground() {
+  try {
+    const permission = await this.locationManager.checkPermission();
+    if (permission === 'granted') {
+      const location = await this.locationManager.getLocation({
+        enableHighAccuracy: false,
+        timeout: 5000,
+        fallbackToIP: false
+      });
+      
+      this.setState({ currentLocation: location });
+      console.log('Background location refresh successful');
+    }
+  } catch (error) {
+    console.log('Background location refresh failed (expected):', error.message);
+  }
+}
+
+/**
+ * Show loading indicator during location detection
+ */
+showLocationLoadingIndicator() {
+  const indicator = document.getElementById('location-indicator');
+  if (indicator) {
+    indicator.innerHTML = `
+      <i class="fas fa-spinner fa-spin"></i>
+      <span>Detecting location...</span>
+    `;
+    indicator.style.opacity = '0.7';
+  }
+}
+
+/**
+ * Hide loading indicator
+ */
+hideLocationLoadingIndicator() {
+  const indicator = document.getElementById('location-indicator');
+  if (indicator) {
+    indicator.style.opacity = '1';
+    this.renderLocationIndicator();
+  }
+}
+
+/**
+ * Show help when location is denied
+ */
+showLocationDeniedHelp() {
+  setTimeout(() => {
+    const html = `
+      <div class="location-help-modal">
+        <h3>📍 Location Access Blocked</h3>
+        <p>Enable location for the best experience:</p>
+        <ul>
+          <li>Find nearby artisans</li>
+          <li>See accurate distances</li>
+          <li>Get relevant search results</li>
+        </ul>
+        <button id="show-enable-instructions" class="btn-primary">
+          How to Enable
+        </button>
+        <button id="close-help" class="link-btn">Use Without Location</button>
+      </div>
+    `;
+
+    this.showModal(html, {
+      type: 'location-help',
+      callback: (modal) => {
+        modal.querySelector('#show-enable-instructions')?.addEventListener('click', () => {
+          this.hideModal();
+          this.showEnableLocationInstructions();
+        });
+        modal.querySelector('#close-help')?.addEventListener('click', () => {
+          this.hideModal();
+        });
+      }
+    });
+  }, 2000);
+}
+// Loaction access prompt from login page
+async promptLocationIfNeeded() {
+  try {
+    const shouldPrompt = localStorage.getItem('trigger_location_prompt');
+    if (!shouldPrompt) return;
+
+    // Remove the trigger (so it won't repeat)
+    localStorage.removeItem('trigger_location_prompt');
+
+    // Defensive log
+    console.log('[promptLocationIfNeeded] triggered by auth flag');
+
+    // 1) Check actual permission state (use your locationManager)
+    let permission = 'prompt';
+    try {
+      permission = await this.locationManager.checkPermission(); // 'granted'|'denied'|'prompt'
+    } catch (err) {
+      console.warn('[promptLocationIfNeeded] permission check failed, assuming prompt', err);
+      permission = 'prompt';
+    }
+    console.log('[promptLocationIfNeeded] permission state:', permission);
+
+    // 2) Branch based on permission
+    if (permission === 'granted') {
+      // Already allowed — just initialize to get GPS
+      await this.initializeLocation();
+      return;
     }
 
-    return artisans.map(artisan => ({
-      ...artisan,
-      distance: this.calculateDistance(artisan.location || artisan)
-    })).sort((a, b) => {
-      // Premium artisans first
-      if (a.premium && !b.premium) return -1;
-      if (!a.premium && b.premium) return 1;
-      
-      // Then by distance
-      return (a.distance || 999) - (b.distance || 999);
+    if (permission === 'denied') {
+      // User has blocked site permissions: show instructions modal (your helper)
+      // Do NOT attempt to trigger native prompt (browser will not show it)
+      this.showModal(
+        `<div class="enable-location-info">
+           <h3>Location blocked</h3>
+           <p>It looks like location access is blocked for this site. Please enable location in your browser or device settings to use nearby features.</p>
+           <div style="margin-top:12px">
+             <button id="open-location-help" class="btn-primary">How to enable</button>
+             <button id="close-location-help" class="link-btn">Dismiss</button>
+           </div>
+         </div>`,
+        {
+          type: 'location-enable',
+          preventBackdropClose: true,
+          callback: (modal) => {
+            modal.querySelector('#open-location-help')?.addEventListener('click', () => {
+              // show your existing enable flow
+              this.hideModal();
+              this.showLocationEnablePrompt && this.showLocationEnablePrompt();
+            });
+            modal.querySelector('#close-location-help')?.addEventListener('click', () => {
+              this.hideModal();
+            });
+          }
+        }
+      );
+      return;
+    }
+
+    // permission === 'prompt' (user hasn't decided) — we want to ask them now
+    // Clear any previous 'naco_location_prompted' so initializeLocation will show your prompt
+    // (only do this for the login-triggered flow)
+    localStorage.removeItem('naco_location_prompted');
+
+    // Show friendly modal (so later calling initializeLocation is treated as user-initiated)
+    // Use a custom modal, not alert, because alert isn't a user click event in some browsers.
+    const allow = await new Promise((resolve) => {
+      const html = `
+        <div class="location-prompt-modal">
+          <h2>Enable Location Services</h2>
+          <p>Naco uses your location to show nearby artisans and accurate distances.</p>
+          <div class="actions" style="margin-top:12px">
+            <button id="lp-allow" class="btn-primary">Allow Location</button>
+            <button id="lp-later" class="link-btn">Use Approximate Location</button>
+          </div>
+        </div>
+      `;
+      this.showModal(html, {
+        type: 'location-prompt',
+        preventBackdropClose: true,
+        callback: (modal) => {
+          modal.querySelector('#lp-allow')?.addEventListener('click', () => {
+            this.hideModal();
+            resolve(true);
+          });
+          modal.querySelector('#lp-later')?.addEventListener('click', () => {
+            this.hideModal();
+            resolve(false);
+          });
+        }
+      });
     });
+
+    if (allow) {
+      // Call the existing initialization which will now run the prompt branch
+      await this.initializeLocation();
+    } else {
+      // User declined via your modal — still call initializeLocation so it falls back to IP
+      await this.initializeLocation();
+    }
+  } catch (err) {
+    console.warn('[promptLocationIfNeeded] error:', err);
   }
+}
+
+
+
+/**
+ * Show custom location permission prompt
+ */
+showLocationPermissionPrompt() {
+  return new Promise((resolve) => {
+    const html = `
+      <div class="location-prompt-modal">
+        <div class="location-prompt-icon">
+          <i class="fas fa-map-marker-alt"></i>
+        </div>
+        <h2>Enable Location Services</h2>
+        <p>Naco needs your location to:</p>
+        <ul class="location-benefits">
+          <li><i class="fas fa-check"></i> Find nearby artisans</li>
+          <li><i class="fas fa-check"></i> Show accurate distances</li>
+          <li><i class="fas fa-check"></i> Sort results by proximity</li>
+        </ul>
+        <p class="privacy-note">
+          <i class="fas fa-shield-alt"></i> 
+          Your location is never shared with artisans until you book.
+        </p>
+        <div class="location-prompt-actions">
+          <button id="allow-location" class="btn-primary">
+            <i class="fas fa-check"></i> Allow Location
+          </button>
+          <button id="deny-location" class="link-btn">
+            Use Approximate Location
+          </button>
+        </div>
+      </div>
+    `;
+
+    this.showModal(html, {
+      type: 'location-prompt',
+      preventBackdropClose: true,
+      callback: (modal) => {
+        modal.querySelector('#allow-location')?.addEventListener('click', () => {
+          this.hideModal();
+          resolve(true);
+        });
+
+        modal.querySelector('#deny-location')?.addEventListener('click', () => {
+          this.hideModal();
+          resolve(false);
+        });
+      }
+    });
+  });
+}
+
+    /**
+ * Show button to enable location later
+ */
+showLocationEnablePrompt() {
+  const locationIndicator = document.getElementById('location-indicator');
+  if (locationIndicator) {
+    locationIndicator.style.cursor = 'pointer';
+    locationIndicator.title = 'Click to enable precise location';
+    
+    // Add pulsing effect to draw attention
+    locationIndicator.style.animation = 'pulse 2s infinite';
+    
+    // Stop pulsing after 10 seconds
+    setTimeout(() => {
+      locationIndicator.style.animation = '';
+    }, 10000);
+  }
+}
+
+  /**
+ * Request precise location with user prompt
+ */
+async requestPreciseLocation() {
+  try {
+    // Show loading toast
+    this.showToast('Requesting location access...', 'info');
+    
+    const location = await this.locationManager.getLocation({
+      enableHighAccuracy: true,
+      timeout: 15000,
+      fallbackToIP: false
+    });
+    
+    this.setState({ currentLocation: location });
+    this.showToast('📍 Precise location enabled', 'success');
+    
+    // Refresh artisan list with new location
+    const sortedArtisans = this.sortArtisansByDistance(this.state.filteredArtisans);
+    this.setState({ filteredArtisans: sortedArtisans });
+    this.render();
+    
+  } catch (error) {
+    console.error('Precise location failed:', error);
+    
+    if (error.message.includes('denied') || error.code === 1) {
+      this.showToast('Location access denied. You can enable it in browser settings.', 'warning');
+      
+      // Show instructions modal
+      this.showEnableLocationInstructions();
+    } else {
+      this.showToast('Failed to get precise location', 'error');
+    }
+  }
+}
+
+async migrateArtisanLocations() {
+  console.log('Starting location migration...');
+  
+  const artisans = await API.getArtisans();
+  let updated = 0;
+  
+  for (const artisan of artisans) {
+    try {
+      // Skip if already has coordinates
+      if (artisan.location?.latitude && artisan.location?.longitude) {
+        continue;
+      }
+      
+      // Get city name
+      const cityName = typeof artisan.location === 'string' 
+        ? artisan.location 
+        : artisan.location?.city;
+      
+      if (!cityName) continue;
+      
+      // Get coordinates from database
+      const coords = this.locationManager.getCityCoordinates(cityName);
+      
+      if (coords) {
+        // Update artisan with coordinates
+        await API.updateArtisanLocation(artisan.id, {
+          city: cityName,
+          state: null,
+          country: 'Nigeria',
+          latitude: coords.lat,
+          longitude: coords.lon
+        });
+        
+        updated++;
+        console.log(`Updated ${artisan.name}: ${cityName} → ${coords.lat}, ${coords.lon}`);
+      }
+    } catch (error) {
+      console.warn(`Failed to migrate ${artisan.name}:`, error);
+    }
+  }
+  
+  console.log(`Migration complete: ${updated} artisans updated`);
+}
+
+  /**
+ * Calculate precise distance with comprehensive fallback strategy
+ */
+calculateDistance(artisanLocation) {
+  if (!this.state.currentLocation) {
+    return null;
+  }
+
+  // Parse artisan location
+  const artisanData = this.parseArtisanLocation(artisanLocation);
+  if (!artisanData) return null;
+
+  const userLocation = this.state.currentLocation;
+
+  // PRIORITY 1: Both have GPS coordinates - calculate precise distance
+  if (artisanData.latitude && artisanData.longitude && 
+      userLocation.latitude && userLocation.longitude) {
+    try {
+      const distance = this.locationManager.calculateDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        artisanData.latitude,
+        artisanData.longitude
+      );
+      return Math.round(distance * 10) / 10; // Round to 1 decimal
+    } catch (error) {
+      console.warn('Precise distance calculation failed:', error);
+    }
+  }
+
+  // PRIORITY 2: User has GPS, artisan has city - estimate from city center
+  if (userLocation.latitude && userLocation.longitude && artisanData.city) {
+    const cityCoords = this.locationManager.getCityCoordinates(artisanData.city);
+    
+    if (cityCoords) {
+      try {
+        const distance = this.locationManager.calculateDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          cityCoords.lat,
+          cityCoords.lon
+        );
+        
+        // If within city radius, show as nearby
+        if (distance < cityCoords.radius) {
+          return 'nearby';
+        }
+        
+        return Math.round(distance * 10) / 10;
+      } catch (error) {
+        console.warn('City-based distance calculation failed:', error);
+      }
+    }
+  }
+
+  // PRIORITY 3: Both have cities - compare city names
+  if (artisanData.city && userLocation.city) {
+    const normalizedArtisanCity = this.locationManager.normalizeCity(artisanData.city);
+    const normalizedUserCity = this.locationManager.normalizeCity(userLocation.city);
+
+    if (normalizedArtisanCity === normalizedUserCity) {
+      return 'nearby';
+    }
+
+    // Try to calculate city-to-city distance
+    const artisanCityCoords = this.locationManager.getCityCoordinates(artisanData.city);
+    const userCityCoords = this.locationManager.getCityCoordinates(userLocation.city);
+
+    if (artisanCityCoords && userCityCoords) {
+      try {
+        const distance = this.locationManager.calculateDistance(
+          userCityCoords.lat,
+          userCityCoords.lon,
+          artisanCityCoords.lat,
+          artisanCityCoords.lon
+        );
+        return Math.round(distance);
+      } catch (error) {
+        console.warn('City-to-city distance failed:', error);
+      }
+    }
+  }
+
+  // FALLBACK: No reliable distance available
+  return null;
+}
+
+/**
+ * Parse artisan location from various formats
+ */
+parseArtisanLocation(location) {
+  if (!location) return null;
+
+  // Format 1: Object with coordinates
+  if (typeof location === 'object' && location.latitude && location.longitude) {
+    return {
+      latitude: parseFloat(location.latitude),
+      longitude: parseFloat(location.longitude),
+      city: location.city || null
+    };
+  }
+
+  // Format 2: Object with city only
+  if (typeof location === 'object' && location.city) {
+    return {
+      latitude: null,
+      longitude: null,
+      city: location.city
+    };
+  }
+
+  // Format 3: String (city name)
+  if (typeof location === 'string') {
+    const city = location.split(',')[0].trim();
+    return {
+      latitude: null,
+      longitude: null,
+      city: city
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Format distance with improved logic
+ */
+formatDistance(distance) {
+  if (distance === null || distance === undefined) {
+    return 'Distance unknown';
+  }
+  
+  if (distance === 'nearby') {
+    return '< 5 km'; // Within city
+  }
+  
+  if (typeof distance === 'number') {
+    if (distance < 1) {
+      return `${Math.round(distance * 1000)}m`;
+    }
+    if (distance < 10) {
+      return `${distance.toFixed(1)} km`; // Show decimal for close distances
+    }
+    return `${Math.round(distance)} km`; // Round for far distances
+  }
+  
+  return 'Distance unknown';
+}
+
+/**
+ * Show instructions for enabling location in browser
+ */
+showEnableLocationInstructions() {
+  const html = `
+    <div class="location-instructions-modal">
+      <h2>Enable Location Access</h2>
+      <p>To enable location services:</p>
+      
+      <div class="browser-instructions">
+        <h4><i class="fab fa-chrome"></i> Chrome / Edge:</h4>
+        <ol>
+          <li>Click the lock icon in the address bar</li>
+          <li>Find "Location" in the permissions list</li>
+          <li>Select "Allow"</li>
+          <li>Refresh this page</li>
+        </ol>
+        
+        <h4><i class="fab fa-firefox"></i> Firefox:</h4>
+        <ol>
+          <li>Click the lock icon in the address bar</li>
+          <li>Click "Clear this permission"</li>
+          <li>Refresh the page and allow when prompted</li>
+        </ol>
+        
+        <h4><i class="fab fa-safari"></i> Safari:</h4>
+        <ol>
+          <li>Go to Safari > Preferences > Websites</li>
+          <li>Select "Location" from the sidebar</li>
+          <li>Find this website and select "Allow"</li>
+        </ol>
+      </div>
+      
+      <div style="text-align: center; margin-top: 20px;">
+        <button id="close-instructions" class="btn-primary">Got it</button>
+      </div>
+    </div>
+  `;
+
+  this.showModal(html, () => {
+    document.getElementById('close-instructions')?.addEventListener('click', () => {
+      this.hideModal();
+    });
+  });
+}
+
+/**
+ * Format distance for display
+ */
+formatDistance(distance) {
+  if (distance === null || distance === undefined) {
+    return 'Distance unknown';
+  }
+  
+  if (distance === 'nearby') {
+    return '< 5 km'; // Show as less than 5km for same city
+  }
+  
+  if (typeof distance === 'string') {
+    // If it's already a formatted string
+    return distance.includes('km') ? distance : `${distance} km`;
+  }
+  
+  if (distance < 1) {
+    return `${Math.round(distance * 1000)}m`;
+  }
+  
+  return `${Math.round(distance * 10) / 10} km`;
+}
+
+ /**
+ * Sort artisans by proximity
+ */
+sortArtisansByDistance(artisans) {
+  if (!this.state.currentLocation) {
+    return artisans;
+  }
+
+  return artisans.map(artisan => {
+    const distance = this.calculateDistance(artisan.location || artisan);
+    
+    // Convert 'nearby' to a sortable number
+    let sortableDistance;
+    if (distance === 'nearby') {
+      sortableDistance = 2; // Treat as 2km for sorting
+    } else if (distance === null) {
+      sortableDistance = 999; // Put at end
+    } else {
+      sortableDistance = distance;
+    }
+    
+    return {
+      ...artisan,
+      distance: distance,
+      sortableDistance: sortableDistance
+    };
+  }).sort((a, b) => {
+    // Premium artisans first
+    if (a.premium && !b.premium) return -1;
+    if (!a.premium && b.premium) return 1;
+    
+    // Then by sortable distance
+    return a.sortableDistance - b.sortableDistance;
+  });
+}
+  
+  /**
+ * Start continuous location tracking
+ */
+startLocationTracking() {
+  // Check if permission is granted
+  this.locationManager.checkPermission().then(permission => {
+    if (permission === 'granted') {
+      console.log('Starting location tracking...');
+      
+      this.locationWatchId = this.locationManager.watchLocation((location) => {
+        console.log('Location updated:', location);
+        
+        // Update state with new location
+        this.setState({ currentLocation: location });
+        
+        // Optionally re-sort artisans by new distance
+        if (this.state.filteredArtisans.length > 0) {
+          const sorted = this.sortArtisansByDistance(this.state.filteredArtisans);
+          this.setState({ filteredArtisans: sorted });
+        }
+        
+      }, {
+        enableHighAccuracy: false, // Use less battery
+        timeout: 30000,
+        maximumAge: 60000 // Update every minute
+      });
+    }
+  });
+}
+
+/**
+ * Stop location tracking
+ */
+stopLocationTracking() {
+  this.locationManager.stopWatching();
+  console.log('Location tracking stopped');
+}
+
+// Call on logout or when user leaves
+destroy() {
+  this.stopNotificationPolling();
+  this.stopLocationTracking(); // Add this
+  this.debounceTimers.forEach(timer => clearTimeout(timer));
+  this.debounceTimers.clear();
+}
   
 
   // Event Binding
@@ -517,6 +1230,13 @@ document.addEventListener('click', (e) => {
 
 this.$('#view-all-featured')?.addEventListener('click', () => this.showAllFeaturedArtisans());
 
+    
+    
+    // Bind click event:
+document.getElementById('location-indicator')?.addEventListener('click', () => {
+  this.openLocationSettings();
+});
+
 // 🔹 Bind location settings button
   const locationBtn = document.getElementById('location-btn');
   if (locationBtn) {
@@ -525,7 +1245,21 @@ this.$('#view-all-featured')?.addEventListener('click', () => this.showAllFeatur
     });
   }
 
-
+document.getElementById('sort-by-distance')?.addEventListener('change', (e) => {
+  if (e.target.checked) {
+    const sorted = this.sortArtisansByDistance(this.state.filteredArtisans);
+    this.setState({ filteredArtisans: sorted });
+  } else {
+    // Sort by rating and premium status only
+    const sorted = [...this.state.filteredArtisans].sort((a, b) => {
+      if (a.premium && !b.premium) return -1;
+      if (!a.premium && b.premium) return 1;
+      return (b.rating || 0) - (a.rating || 0);
+    });
+    this.setState({ filteredArtisans: sorted });
+  }
+  this.render();
+});
 
     // Page close buttons
     this.$('#close-search')?.addEventListener('click', () => this.closeSearchPage());
@@ -1413,41 +2147,45 @@ getOptimizedImageUrl(imageUrl, options = {}) {
   }, true); // Use capture phase
 }
 
-/**renderSearchResultCard(artisan) {
-  // No API call here - just use the pre-calculated rating
-  const averageRating = (artisan.rating || 0).toFixed(1);
-  const reviewCount = artisan.reviewCount || 0;
-
-  return `
-    <div class="search-result-card" data-id="${artisan.id}">
-     <img 
-  src="${artisan.photo ? artisan.photo.replace('/upload/', '/upload/f_auto,q_auto,w_200/') : '../assets/avatar-placeholder.png'}"
-  alt="${this.escapeHtml(artisan.name)}"
- 
-  onerror="this.src='../assets/avatar-placeholder.png'"
-  width="100" height="100"
-/>
-      <div class="search-result-info">
-        <h4>${this.escapeHtml(artisan.name)} ${this.renderVerificationBadge(artisan)}</h4>
-        <p class="search-result-skill">${this.escapeHtml(artisan.skill)}</p>
-        <p class="search-result-location">${this.escapeHtml(artisan.location)}</p>
-        <div class="search-result-rating">
-          <i class="fas fa-star"></i> ${averageRating} (${reviewCount} reviews)
-          ${artisan.premium ? '<span class="premium-badge">PREMIUM</span>' : ''}
-        </div>
-      </div>
-      <div class="search-result-price">
-        ${this.formatCurrency(artisan.rate)}
-      </div>
-    </div>
-  `;
-}
-**/
-
     renderSearchResultCard(artisan) {
   const averageRating = (artisan.rating || 0).toFixed(1);
   const reviewCount = artisan.reviewCount || 0;
   const optimizedImage = this.getOptimizedImageUrl(artisan.photo, { width: 200, quality: 'auto' });
+  
+  // Calculate distance (may be null, 'nearby', or a number)
+  const distance = this.calculateDistance(artisan.location);
+  const distanceText = this.formatDistance(distance);
+  
+  // Determine distance color and icon
+  let distanceColor = 'var(--muted)';
+  let distanceIcon = 'fa-map-marker-alt';
+  let showDistance = distance !== null;
+  
+  if (distance === 'nearby') {
+    // Same city - show as nearby
+    distanceColor = 'var(--green)';
+    distanceIcon = 'fa-location-dot';
+  } else if (distance !== null && typeof distance === 'number') {
+    // Has real distance
+    if (distance < 5) {
+      distanceColor = 'var(--green)';
+      distanceIcon = 'fa-location-arrow';
+    } else if (distance < 10) {
+      distanceColor = '#10955a';
+      distanceIcon = 'fa-location-arrow';
+    } else if (distance < 20) {
+      distanceColor = '#f59e0b';
+      distanceIcon = 'fa-map-marker-alt';
+    } else {
+      distanceColor = '#ef4444';
+      distanceIcon = 'fa-map-marker-alt';
+    }
+  }
+
+  // Parse location to show city
+  const locationText = typeof artisan.location === 'string' ? 
+    artisan.location : 
+    (artisan.location?.city || artisan.location?.location || 'Location not set');
 
   return `
     <div class="search-result-card" data-id="${artisan.id}">
@@ -1456,17 +2194,72 @@ getOptimizedImageUrl(imageUrl, options = {}) {
         alt="${this.escapeHtml(artisan.name)}"
         loading="lazy"
         onerror="this.src='../assets/avatar-placeholder.png'"
-        width="100" 
-        height="100"
+        width="200" 
+        height="200"
       />
       <div class="search-result-info">
         <h4>${this.escapeHtml(artisan.name)} ${this.renderVerificationBadge(artisan)}</h4>
         <p class="search-result-skill">${this.escapeHtml(artisan.skill)}</p>
-        <p class="search-result-location">${this.escapeHtml(artisan.location)}</p>
+        <p class="search-result-location">
+          <i class="fas ${distanceIcon}" style="color: ${distanceColor};"></i>
+          ${this.escapeHtml(locationText)}
+        </p>
         <div class="search-result-rating">
           <i class="fas fa-star"></i> ${averageRating} (${reviewCount} reviews)
           ${artisan.premium ? '<span class="premium-badge">PREMIUM</span>' : ''}
         </div>
+        ${showDistance ? `
+          <div class="distance-indicator" style="
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            background: ${distanceColor}22;
+            border-radius: 12px;
+            font-size: 12px;
+            color: ${distanceColor};
+            font-weight: 600;
+            margin-top: 8px;
+          ">
+            <i class="fas fa-route"></i>
+            <span>${distanceText} away</span>
+          </div>
+        ` : `
+          <div class="distance-indicator" style="
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            background: rgba(100, 116, 139, 0.1);
+            border-radius: 12px;
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 600;
+            margin-top: 8px;
+          ">
+            <i class="fas fa-map-marker-alt"></i>
+            <span>Distance unknown</span>
+          </div>
+        `}
+        ${!showDistance && (!this.state.currentLocation || this.state.currentLocation.method === 'default') ? `
+          <button class="enable-location-btn" onclick="window.Naco.app.requestPreciseLocation()" style="
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 8px;
+            cursor: pointer;
+          ">
+            <i class="fas fa-crosshairs"></i>
+            <span>Enable Location</span>
+          </button>
+        ` : ''}
       </div>
       <div class="search-result-price">
         ${this.formatCurrency(artisan.rate)}
@@ -1474,7 +2267,6 @@ getOptimizedImageUrl(imageUrl, options = {}) {
     </div>
   `;
 }
- 
 
   clearMainSearch() {
     this.$('#main-search-input').value = '';
@@ -1530,9 +2322,90 @@ getOptimizedImageUrl(imageUrl, options = {}) {
       </button>
     `).join('');
   }
+  
+  async detectAndSuggestCity() {
+  if (!this.state.currentLocation) return;
+
+  const location = this.state.currentLocation;
+  
+  // If we have city from location
+  if (location.city) {
+    // Check if this city is in our cities list
+    const cityMatch = this.state.cities.find(
+      city => city.toLowerCase() === location.city.toLowerCase()
+    );
+
+    if (cityMatch) {
+      // Auto-select the detected city
+      this.setState({ selectedCity: cityMatch });
+      
+      const citySelect = this.$('#city-select');
+      if (citySelect) {
+        citySelect.value = cityMatch;
+      }
+      
+      this.applyFilters();
+      
+      this.showToast(`📍 Showing artisans in ${cityMatch}`, 'info');
+    } else {
+      // City not in list, show suggestion
+      this.showCitySuggestion(location.city);
+    }
+  }
+}
+
+showCitySuggestion(detectedCity) {
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-info';
+  toast.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <p>We detected you're in ${this.escapeHtml(detectedCity)}</p>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn-sm" id="use-detected-city">Use This City</button>
+        <button class="btn-sm secondary" id="dismiss-suggestion">Dismiss</button>
+      </div>
+    </div>
+  `;
+  
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--card);
+    padding: 16px;
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    z-index: 2000;
+    min-width: 280px;
+  `;
+  
+  document.body.appendChild(toast);
+  
+  document.getElementById('use-detected-city')?.addEventListener('click', () => {
+    // Add the city to the list
+    this.state.cities.push(detectedCity);
+    this.setState({ selectedCity: detectedCity });
+    this.buildCitySelect();
+    this.applyFilters();
+    toast.remove();
+    this.showToast(`Added ${detectedCity} to cities list`, 'success');
+  });
+  
+  document.getElementById('dismiss-suggestion')?.addEventListener('click', () => {
+    toast.remove();
+  });
+  
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.remove();
+    }
+  }, 10000); // Auto-dismiss after 10 seconds
+}
+
 
   // Data Loading
-  async loadArtisans() {
+  /** async loadArtisans() {
   try {
     const artisans = await API.getArtisans();
     const cities = [...new Set(artisans.map(a => a.location).filter(Boolean))];
@@ -1545,6 +2418,29 @@ getOptimizedImageUrl(imageUrl, options = {}) {
     });
     
     this.buildCitySelect();
+  } catch (error) {
+    console.error('Failed to load artisans:', error);
+    this.showToast('Failed to load artisans', 'error');
+  }
+} **/
+    // Call in loadArtisans after artisans are loaded:
+async loadArtisans() {
+  try {
+    const artisans = await API.getArtisans();
+    const cities = [...new Set(artisans.map(a => a.location).filter(Boolean))];
+    
+    this.setState({
+      artisans,
+      filteredArtisans: artisans,
+      featuredArtisans: artisans.filter(a => a.premium).slice(0, 8),
+      cities
+    });
+    
+    this.buildCitySelect();
+    
+    // Detect and suggest city based on location
+    await this.detectAndSuggestCity();
+    
   } catch (error) {
     console.error('Failed to load artisans:', error);
     this.showToast('Failed to load artisans', 'error');
@@ -3302,10 +4198,10 @@ async performLogoutCleanup() {
               ${this.renderVerificationBadge(artisan)}
             </h2>
             <p class="profile-skill">${this.escapeHtml(artisan.skill)}</p>
-            <p class="profile-location">
-              <i class="fas fa-map-marker-alt"></i> 
-              ${this.escapeHtml(artisan.location)} • ${distance} km away
-            </p>
+           <p class="profile-location">
+  <i class="fas fa-map-marker-alt"></i> 
+  ${this.escapeHtml(artisan.location)} • ${this.formatDistance(distance)} away
+</p>
             <div class="profile-stats">
               <span><i class="fas fa-star"></i> ${averageRating} (${reviews.length} reviews)</span>
               <span><i class="fas fa-clock"></i> ${artisan.yearsExperience || 0}+ years</span>
@@ -4794,22 +5690,117 @@ async openClientProfile(clientId) {
     this.showToast('Failed to load booking details', 'error');
   }
 } **/
+
+    openLocationPrivacy() {
+  const html = `
+    <div class="privacy-modal">
+      <h2>Location Privacy</h2>
+      
+      <div class="privacy-section">
+        <h3>How We Use Your Location</h3>
+        <p>Naco uses your location to provide you with the best experience:</p>
+        <ul>
+          <li><strong>Find Nearby Artisans:</strong> Show you service providers closest to you</li>
+          <li><strong>Accurate Distances:</strong> Calculate real distances, not estimates</li>
+          <li><strong>Better Search:</strong> Prioritize results relevant to your area</li>
+          <li><strong>Local Recommendations:</strong> Suggest popular services in your city</li>
+        </ul>
+      </div>
+
+      <div class="privacy-section">
+        <h3>Location Methods</h3>
+        
+        <div class="method-card">
+          <i class="fas fa-crosshairs"></i>
+          <div>
+            <strong>GPS Location (Most Accurate)</strong>
+            <p>Uses your device's GPS for pinpoint accuracy (±10-50m). Requires permission.</p>
+          </div>
+        </div>
+
+        <div class="method-card">
+          <i class="fas fa-wifi"></i>
+          <div>
+            <strong>IP-Based Location (Approximate)</strong>
+            <p>Uses your internet connection to estimate location (±5km). No permission needed.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="privacy-section">
+        <h3>Your Privacy Matters</h3>
+        <ul>
+          <li>✓ Your location is never shared with artisans until you book</li>
+          <li>✓ We don't track your movements or location history</li>
+          <li>✓ Location data is stored only on your device</li>
+          <li>✓ You can disable location access anytime</li>
+          <li>✓ No location data is sold to third parties</li>
+        </ul>
+      </div>
+
+      <div class="privacy-actions">
+        <button id="grant-location-access" class="btn-primary">
+          <i class="fas fa-map-marker-alt"></i> Grant Location Access
+        </button>
+        <button id="use-ip-location" class="btn-secondary">
+          <i class="fas fa-wifi"></i> Use IP Location Instead
+        </button>
+      </div>
+
+      <div style="text-align: center; margin-top: 20px;">
+        <button id="close-privacy" class="link-btn">Close</button>
+      </div>
+    </div>
+  `;
+
+  this.showModal(html, () => {
+    document.getElementById('grant-location-access')?.addEventListener('click', async () => {
+      await this.requestPreciseLocation();
+      this.hideModal();
+    });
+
+    document.getElementById('use-ip-location')?.addEventListener('click', async () => {
+      try {
+        const location = await this.locationManager.getLocation({
+          fallbackToIP: true,
+          enableHighAccuracy: false
+        });
+        this.setState({ currentLocation: location });
+        this.showToast('Using IP-based location', 'success');
+        this.hideModal();
+      } catch (error) {
+        this.showToast('Failed to get location', 'error');
+      }
+    });
+
+    document.getElementById('close-privacy')?.addEventListener('click', () => {
+      this.hideModal();
+    });
+  });
+}
+
+
     
     openLocationSettings() {
   const currentLocation = this.state.currentLocation;
-  const permission = this.locationManager.checkPermission();
+  
+  // Validate location data
+  if (!currentLocation) {
+    this.showToast('Location not available', 'error');
+    return;
+  }
 
   const html = `
     <div class="location-settings-modal">
       <h2>Location Settings</h2>
       
       <div class="location-status">
-        <div class="status-indicator ${currentLocation.method}">
+        <div class="status-indicator ${currentLocation.method || 'default'}">
           <i class="fas fa-map-marker-alt"></i>
         </div>
         <div class="status-info">
           <strong>Current Location Method</strong>
-          <p class="muted">${this.getLocationMethodLabel(currentLocation.method)}</p>
+          <p class="muted">${this.getLocationMethodLabel(currentLocation.method || 'default')}</p>
         </div>
       </div>
 
@@ -4817,7 +5808,14 @@ async openClientProfile(clientId) {
         ${currentLocation.city ? `
           <div class="detail-row">
             <i class="fas fa-city"></i>
-            <span>${currentLocation.city}, ${currentLocation.country || ''}</span>
+            <span>${currentLocation.city}${currentLocation.state ? ', ' + currentLocation.state : ''}${currentLocation.country ? ', ' + currentLocation.country : ''}</span>
+          </div>
+        ` : ''}
+        
+        ${currentLocation.latitude && currentLocation.longitude ? `
+          <div class="detail-row">
+            <i class="fas fa-map-pin"></i>
+            <span>${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}</span>
           </div>
         ` : ''}
         
@@ -4828,7 +5826,7 @@ async openClientProfile(clientId) {
         
         <div class="detail-row">
           <i class="fas fa-clock"></i>
-          <span>Last updated: ${new Date(currentLocation.timestamp).toLocaleString()}</span>
+          <span>Last updated: ${this.formatLocationTimestamp(currentLocation.timestamp)}</span>
         </div>
       </div>
 
@@ -4866,27 +5864,115 @@ async openClientProfile(clientId) {
   `;
 
   this.showModal(html, () => {
-    document.getElementById('enable-precise-location')?.addEventListener('click', async () => {
-      await this.requestPreciseLocation();
-      this.hideModal();
-    });
+    const enableBtn = document.getElementById('enable-precise-location');
+    const refreshBtn = document.getElementById('refresh-location');
+    const clearBtn = document.getElementById('clear-location');
+    const closeBtn = document.getElementById('close-location-settings');
 
-    document.getElementById('refresh-location')?.addEventListener('click', async () => {
-      await this.initializeLocation();
-      this.showToast('Location refreshed', 'success');
-      this.hideModal();
-    });
+    if (enableBtn) {
+      enableBtn.addEventListener('click', async () => {
+        enableBtn.disabled = true;
+        enableBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting...';
+        
+        try {
+          await this.requestPreciseLocation();
+          this.hideModal();
+        } catch (error) {
+          console.error('Enable location failed:', error);
+          this.showToast('Failed to enable location', 'error');
+          enableBtn.disabled = false;
+          enableBtn.innerHTML = '<i class="fas fa-crosshairs"></i> Enable Precise Location';
+        }
+      });
+    }
 
-    document.getElementById('clear-location')?.addEventListener('click', () => {
-      this.locationManager.clearLocation();
-      this.showToast('Location cleared', 'success');
-      this.hideModal();
-    });
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', async () => {
+        refreshBtn.disabled = true;
+        refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+        
+        try {
+          await this.initializeLocation();
+          this.showToast('Location refreshed', 'success');
+          this.hideModal();
+          
+          // Reopen with updated info
+          setTimeout(() => {
+            this.openLocationSettings();
+          }, 300);
+        } catch (error) {
+          console.error('Refresh failed:', error);
+          this.showToast('Failed to refresh location', 'error');
+          refreshBtn.disabled = false;
+          refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh Location';
+        }
+      });
+    }
 
-    document.getElementById('close-location-settings')?.addEventListener('click', () => {
-      this.hideModal();
-    });
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        if (confirm('This will reset your location to default. Continue?')) {
+          this.locationManager.clearLocation();
+          const defaultLocation = this.locationManager.getDefaultLocation();
+          this.setState({ currentLocation: defaultLocation });
+          this.showToast('Location cleared', 'success');
+          this.hideModal();
+        }
+      });
+    }
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        this.hideModal();
+      });
+    }
   });
+}
+/**
+ * Format location timestamp for display
+ */
+formatLocationTimestamp(timestamp) {
+  if (!timestamp) {
+    return 'Unknown';
+  }
+
+  try {
+    const date = new Date(timestamp);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return 'Unknown';
+    }
+
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    // Show relative time for recent updates
+    if (diffMins < 1) {
+      return 'Just now';
+    } else if (diffMins < 60) {
+      return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    } else if (diffDays < 7) {
+      return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+    }
+
+    // Show full date for older updates
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    console.error('Date formatting error:', error);
+    return 'Unknown';
+  }
 }
 
 getLocationMethodLabel(method) {
@@ -4896,7 +5982,7 @@ getLocationMethodLabel(method) {
     'default': '○ Default Location',
     'manual': '✎ Manual Selection'
   };
-  return labels[method] || 'Unknown';
+  return labels[method] || '○ Location Method Unknown';
 }
     
     async openBookingDetails(bookingId, options = {}) {
@@ -7920,23 +9006,89 @@ isModalOpen(type) {
     return `<i class="fas fa-check-circle verification-badge" title="Verified Premium User"></i>`;
   }
 
-  calculateDistance(artisanLocation) {
-    if (!this.state.currentLocation) {
-      return Math.floor(Math.random() * 20) + 1;
-    }
+  /**
+ * Calculate distance using location manager with better fallbacks
+ */
+calculateDistance(artisanLocation) {
+  if (!this.state.currentLocation) {
+    return null;
+  }
 
-    if (this.state.selectedCity === artisanLocation) {
-      return Math.floor(Math.random() * 5) + 1;
-    } else {
-      return Math.floor(Math.random() * 40) + 10;
+  // Extract artisan's city from various possible formats
+  let artisanCity = null;
+  let artisanLat = null;
+  let artisanLon = null;
+
+  if (typeof artisanLocation === 'string') {
+    // Location is a string like "Lagos" or "Lagos, Nigeria"
+    artisanCity = artisanLocation.split(',')[0].trim();
+  } else if (artisanLocation?.city) {
+    // Location is an object with city property
+    artisanCity = artisanLocation.city;
+    artisanLat = artisanLocation.latitude;
+    artisanLon = artisanLocation.longitude;
+  } else if (artisanLocation?.location) {
+    // Location has a location property
+    artisanCity = artisanLocation.location.split(',')[0].trim();
+  }
+
+  // Get user's city
+  const userCity = this.state.currentLocation.city || this.state.selectedCity;
+
+  // If artisan has coordinates and we have user coordinates, calculate real distance
+  if (artisanLat && artisanLon && 
+      this.state.currentLocation.latitude && 
+      this.state.currentLocation.longitude) {
+    try {
+      const distance = this.locationManager.calculateDistance(
+        this.state.currentLocation.latitude,
+        this.state.currentLocation.longitude,
+        artisanLat,
+        artisanLon
+      );
+      return Math.round(distance * 10) / 10; // Round to 1 decimal
+    } catch (error) {
+      console.warn('Distance calculation failed:', error);
     }
   }
+
+  // City-based comparison (case-insensitive, trimmed)
+  if (artisanCity && userCity) {
+    const normalizeCity = (city) => {
+      return city.toLowerCase()
+        .trim()
+        .replace(/\s+/g, ' ') // normalize spaces
+        .replace(/[^\w\s]/g, ''); // remove special chars
+    };
+
+    const normalizedArtisanCity = normalizeCity(artisanCity);
+    const normalizedUserCity = normalizeCity(userCity);
+
+    console.log('Comparing cities:', {
+      artisan: normalizedArtisanCity,
+      user: normalizedUserCity,
+      match: normalizedArtisanCity === normalizedUserCity
+    });
+
+    if (normalizedArtisanCity === normalizedUserCity) {
+      // Same city - return special marker
+      return 'nearby';
+    } else {
+      // Different cities - don't show distance (too inaccurate)
+      return null;
+    }
+  }
+
+  // No location data available
+  return null;
+}
   
  
 
   // Rendering Methods
   render() {
     this.renderHeader();
+    this.renderLocationIndicator();
     this.updateMainVisibility();
     this.renderFeaturedArtisans();
     this.renderSearchResults();
@@ -7946,6 +9098,43 @@ isModalOpen(type) {
     
     console.log('Render complete');
   }
+  
+  renderLocationIndicator() {
+  const location = this.state.currentLocation;
+  if (!location) return '';
+
+  const icons = {
+    gps: '<i class="fas fa-crosshairs"></i>',
+    ip: '<i class="fas fa-wifi"></i>',
+    default: '<i class="fas fa-map-marker-alt"></i>'
+  };
+
+  const colors = {
+    gps: 'var(--green)',
+    ip: '#f59e0b',
+    default: 'var(--muted)'
+  };
+
+  return `
+    <div class="location-indicator" 
+         style="
+           display: flex;
+           align-items: center;
+           gap: 6px;
+           padding: 6px 12px;
+           background: var(--card);
+           border-radius: 20px;
+           font-size: 13px;
+           color: ${colors[location.method]};
+           cursor: pointer;
+         "
+         id="location-indicator"
+         title="Click to view location settings">
+      ${icons[location.method]}
+      <span>${location.city || 'Location'}</span>
+    </div>
+  `;
+}
 
   renderHeader() {
     const profilePic = this.$('#profile-pic');
@@ -7954,8 +9143,7 @@ isModalOpen(type) {
     const roleLabel = this.$('#roleLabel');
     const roleSwitch = this.$('#roleSwitch');
     const profileDropdown = this.$('#profile-dropdown');
-    
-    
+
 
     if (this.state.user) {
       if (profilePic) {
@@ -8086,63 +9274,95 @@ isModalOpen(type) {
     });
   }
 
-  renderSearchResults() {
-    const container = this.$('#results-list');
-    if (!container) return;
+renderSearchResults() {
+  const container = this.$('#results-list');
+  if (!container) return;
 
-    const sortedResults = [...this.state.filteredArtisans].sort((a, b) => {
-      if (a.premium && !b.premium) return -1;
-      if (!a.premium && b.premium) return 1;
-      return (b.rating || 0) - (a.rating || 0);
-    });
+  const sortedResults = [...this.state.filteredArtisans].sort((a, b) => {
+    if (a.premium && !b.premium) return -1;
+    if (!a.premium && b.premium) return 1;
+    return (b.rating || 0) - (a.rating || 0);
+  });
 
-    container.innerHTML = sortedResults.map(artisan => {
-      const distance = this.calculateDistance(artisan.location);
-      const isFavorite = this.state.favorites.has(artisan.id);
+  container.innerHTML = sortedResults.map(artisan => {
+    const distance = this.calculateDistance(artisan.location);
+    const distanceText = this.formatDistance(distance);
+    const isFavorite = this.state.favorites.has(artisan.id);
+    
+    // Determine distance display with km
+    let distanceDisplay = '';
+    let distanceColor = 'var(--muted)';
+    
+    if (distance === 'nearby') {
+      distanceDisplay = `<i class="fas fa-location-dot" style="color: var(--green);"></i> ${distanceText}`;
+      distanceColor = 'var(--green)';
+    } else if (distance !== null && typeof distance === 'number') {
+      if (distance < 5) distanceColor = 'var(--green)';
+      else if (distance < 10) distanceColor = '#10955a';
+      else if (distance < 20) distanceColor = '#f59e0b';
+      else distanceColor = '#ef4444';
       
-      return `
-  <div class="artisan-card fade-in" data-id="${artisan.id}">
-    <div class="artisan-card-header">
-      <img src="${artisan.photo || '../assets/avatar-placeholder.png'}" 
-           alt="${this.escapeHtml(artisan.name)}"
-           >
-      <div class="artisan-info">
-        <div class="artisan-title">
-          <strong>
-            ${this.escapeHtml(artisan.name)}
-            ${this.renderVerificationBadge(artisan)}
-          </strong>
-          ${artisan.premium ? '<span class="premium-badge">PREMIUM</span>' : ''}
+      distanceDisplay = `<i class="fas fa-map-marker-alt" style="color: ${distanceColor};"></i> ${distanceText}`;
+    } else {
+      distanceDisplay = '<i class="fas fa-map-marker-alt"></i> Distance unknown';
+    }
+    
+    return `
+      <div class="artisan-card fade-in" data-id="${artisan.id}">
+        <div class="artisan-card-header">
+          <img src="${artisan.photo || '../assets/avatar-placeholder.png'}" 
+               alt="${this.escapeHtml(artisan.name)}"
+               onerror="this.src='../assets/avatar-placeholder.png'">
+          <div class="artisan-info">
+            <div class="artisan-title">
+              <strong>
+                ${this.escapeHtml(artisan.name)}
+                ${this.renderVerificationBadge(artisan)}
+              </strong>
+              ${artisan.premium ? '<span class="premium-badge">PREMIUM</span>' : ''}
+            </div>
+            <div class="artisan-meta">
+              ${this.escapeHtml(artisan.skill)} • ${this.escapeHtml(artisan.location)} • ${this.formatCurrency(artisan.rate)}
+            </div>
+            <div class="artisan-rating muted">
+              <i class="fas fa-star"></i> ${(artisan.rating || 0).toFixed(1)} • 
+              ${distanceDisplay}
+              ${artisan.availability ? ` • <span class="status-available">${artisan.availability}</span>` : ''}
+            </div>
+          </div>
         </div>
-        <div class="artisan-meta">
-          ${this.escapeHtml(artisan.skill)} • ${this.escapeHtml(artisan.location)} • ${this.formatCurrency(artisan.rate)}
-        </div>
-        <div class="artisan-rating muted">
-          <i class="fas fa-star"></i> ${(artisan.rating || 0).toFixed(1)} • 
-          <i class="fas fa-map-marker-alt"></i> ${distance} km away
-          ${artisan.availability ? ` • <span class="status-available">${artisan.availability}</span>` : ''}
+        <div class="artisan-card-bottom">
+          <div class="actions">
+            <button class="btn-book btn-cta" aria-label="Book ${this.escapeHtml(artisan.name)}" data-action="book">
+              <i class="fas fa-calendar-plus"></i>
+            </button>
+            <button class="btn-fav ${isFavorite ? 'active' : ''}" aria-label="${isFavorite ? 'Remove from' : 'Add to'} favorites" data-action="favorite">
+              <i class="fas fa-heart"></i>
+            </button>
+            <button class="btn-wa" aria-label="WhatsApp ${this.escapeHtml(artisan.name)}" data-action="whatsapp">
+              <i class="fab fa-whatsapp"></i>
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-    <div class="artisan-card-bottom">
-      <div class="actions">
-        <button class="btn-book btn-cta" aria-label="Book ${this.escapeHtml(artisan.name)}" data-action="book">
-          <i class="fas fa-calendar-plus"></i>
-        </button>
-        <button class="btn-fav ${isFavorite ? 'active' : ''}" aria-label="${isFavorite ? 'Remove from' : 'Add to'} favorites" data-action="favorite">
-          <i class="fas fa-heart"></i>
-        </button>
-        <button class="btn-wa" aria-label="WhatsApp ${this.escapeHtml(artisan.name)}" data-action="whatsapp">
-          <i class="fab fa-whatsapp"></i>
-        </button>
-      </div>
-    </div>
-  </div>
-`;
-    }).join('');
+    `;
+  }).join('');
 
-    this.bindSearchResultsClickEvents();
-  }
+  this.bindSearchResultsClickEvents();
+}
+
+//Temperoral debug
+debugLocationMatching() {
+  console.log('=== LOCATION MATCHING DEBUG ===');
+  console.log('Current user location:', this.state.currentLocation);
+  console.log('Selected city:', this.state.selectedCity);
+  
+  this.state.filteredArtisans.slice(0, 5).forEach(artisan => {
+    console.log('\n--- Artisan:', artisan.name);
+    console.log('Location data:', artisan.location);
+    console.log('Calculated distance:', this.calculateDistance(artisan.location));
+  });
+}
 
   bindSearchResultsClickEvents() {
   const resultsList = this.$('#results-list');
